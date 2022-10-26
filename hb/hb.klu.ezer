@@ -1,0 +1,129 @@
+# Aplikace HledámBoha
+# (c) 2022 Martin Šmídek <martin@smidek.eu>
+
+# ======================================================================================= klu - Klub
+func warning1() { warning('Před touto operací je zapotřebí inicializovat kartu Klub|Kontakty'); return(0); }
+# ========================================================================================> KONTAKTY
+panel cle {type:'plain', title:"[fa-home] Kontakty", _sys:'*',  include:'onload'
+  func refresh_vyber() { return(warning1); }
+  func select_cleny(ids) { return(warning1); }
+  func show_clen(id) { return(warning1); }
+  func curr_clen(m) { return(warning1); }
+  func zpet_clen() {}
+  form Clen
+  form Dar
+}
+# =========================================================================================> PŘEVODY
+panel pre {type:'plain', title:"[fa-bank] Převody", _sys:'*',  include:'onclick' }
+# ===========================================================================================> DONIO
+panel don {type:'plain', title:"[fa-envira] Donio", _sys:'*',  include:'onclick' }
+# =========================================================================================> DARUJME
+panel dar {type:'plain', title:"[fa-paw] Darujme", _sys:'*',  include:'onclick' }
+# ========================================================================================> KONTROLY
+panel kon  {type:'right', title:"[fa-info-circle] Informace, kontroly", _sys:'*',
+  menu leve {type:'left', active:*
+    menu cisla {title:'Statistika',type:'group', _sys:'*'
+      item pocet {title:'[fa-line-chart] počet kontaktů'       ,par:{fce:'stat'} }
+      item       {title:'[fa-line-chart]vývoj obdarování'      ,par:{fce:'vyvoj', p:'2021'} }
+    }
+    menu dary {title:'Kontrola darů',type:'group', _sys:'*', active:no
+      item {title:'[fa-exclamation] duplicity letošních darů',        par:{fce:'dary_dupl',p:'0',corr:'0'} }
+      item {title:'[fa-exclamation-circle] duplicity loňských darů',  par:{fce:'dary_dupl',p:'1',corr:'0'} }
+//      item {title:'[fa-exclamation-circle fa-red] ... 1. OPRAVA',     par:{fce:'dary_dupl',p:'1',corr:'1'}, skill:'m'}
+//      item {title:'[fa-exclamation-circle fa-red] ... 2. OPRAVA',     par:{fce:'dary_dupl',p:'1',corr:'2'}, skill:'m' }
+    }
+    menu vypisy  {title:'Kontrola výpisů',type:'group', _sys:'*'
+      item {title:'[fa-question] nechybí nějaký loňský měsíc?',       par:{fce:'vypisy_uplnost',p:'1',corr:'0'} }
+      item {title:'[fa-question] nechybí nějaký letošní měsíc?',      par:{fce:'vypisy_uplnost',p:'0',corr:'0'} }
+//      item {title:'[fa-exclamation-circle] vymaž chybně nahrané!',    par:{fce:'vypisy_dupl',p:'1',corr:'2'}, skill:'m' }
+    }
+    func onclick(i:ezer){
+      rp.header(i);
+      panel.property({height:'*',min_height:8000});
+      if (!i.par.corr || confirm("POZOR dojde k masívní úpravě dat, mám pokračovat?")) 
+        rp.append(php.klu_inf(i.par));
+    }
+  }
+  use rp: form right [12,4,,]
+}
+//# ===========================================================================================> ÚKOLY
+panel uko  {type:'right', title:"[fa-cutlery] Úkoly", _sys:'*', include:'onload', skill:'hdu|hdu',
+  func ukol_show() { return(warning1); }
+  func ukol_show(id_ukol,kdo,komu) { return(warning1); }
+}
+# ===========================================================================================> (MAP)
+# systémové číselníky
+map cis_k_zpusob:       table _cis  { where:"druh='k_zpusob'", order:'poradi', key_id:'data'}
+map cis_k_osoba:        table _cis  { where:"druh='k_osoba'", order:'poradi', key_id:'data'}
+map cis_k_potvrzeni:    table _cis  { where:"druh='k_potvrzeni'", order:'poradi', key_id:'data'}
+map cis_k_vyjimka:      table _cis  { where:"druh='k_vyjimka'", order:'poradi', key_id:'data'}
+map cis_k_rod:          table _cis  { where:"druh='k_rod'", order:'poradi', key_id:'data'}
+map cis_b_ucty:         table _cis  { where:"druh='b_ucty'", order:'poradi', key_id:'data'}
+map user:               table _user { where:'1', order:'surname'}
+map user2:              table _user { where:"skills!=''", order:'surname'}
+
+# =======================================================================================> BackTrace
+panel Ctrack [,,572,564] { title:'Korekce oprav členů', type:'popup', css:'dialog'
+  use CT_track: form _back [0,0,,] { tabindex:20 },
+  func Load (id) {
+    Ctrack.popup(50,10);
+    CT_track.list.browse_load(`kde='clen' AND klic=${id}`,"kdy DESC");
+    CT_track.list.raise('onrowclick')
+  }
+  # -------------------------------------------------------------------------- _back
+  form _back [,,570,570] {
+    label [10,4,,] { title:'Dvojklik na řádku vrátí původní hodnotu do formuláře Kontakt' }
+    browse list [8,20,150,100] { rows:27, wheel:13
+      show kdy [,,100,] { title:'kdy', data:_track.kdy },
+      show kdo [,,30,] { title:'kdo', data:_track.kdo },
+      show op [,,10,] { title:'?', data:_track.op },
+      show fld [,,60,] { title:'položka', data:_track.fld },
+      show old [,,200,] { title:'původní hodnota', data:_track.old, format:'t'  },
+      show val [,,110,] { title:'změněná hodnota', data:_track.val, format:'t'  },
+      show id_track [,,0,] { data:_track.id_track }
+      // dvojklik na řádku nabídne původní hodnotu
+      func onsubmit () { var f:ezer
+        if (eq(op,'c','d')) 
+          warning('změny v historii nelze vracet - pouze ručně opravit')
+        else {
+          f= cle.Clen[fld];
+          f.set(old); f.change()
+        }
+      }
+    }
+    button zpet [500,530,,] { title:'Zpět', skill:'hdde|hdde'
+      func onclick() { panel.close(0) } }
+  }
+}
+panel Dtrack [,,572,564] { title:'Vkládání a opravy darů', type:'popup', css:'dialog'
+  use DT_track: form _back [0,0,,] { tabindex:20 },
+  func Load (id) {
+    Dtrack.popup(50,10);
+    DT_track.list.browse_load(conc("kde='dar' AND klic=",id),"kdy DESC");
+    DT_track.list.raise('onrowclick')
+  }
+  # -------------------------------------------------------------------------- _back
+  form _back [,,570,570] {
+    label [10,4,,] { title:'Dvojklik na řádku vrátí původní hodnotu do formuláře Dar' }
+    browse list [8,20,150,100] { rows:27, wheel:13
+      show kdy [,,100,] { title:'kdy', data:_track.kdy },
+      show kdo [,,30,] { title:'kdo', data:_track.kdo },
+      show op [,,10,] { title:'?', data:_track.op },
+      show fld [,,60,] { title:'položka', data:_track.fld },
+      show old [,,200,] { title:'původní hodnota', data:_track.old, format:'t'  },
+      show val [,,110,] { title:'změněná hodnota', data:_track.val, format:'t'  },
+      show id_track [,,0,] { data:_track.id_track },
+      // dvojklik na řádku nabídne původní hodnotu
+      func onsubmit () { var f:ezer
+        if (eq(DT_track.list.op,'c','d')) 
+          warning('změny v historii nelze vracet - pouze ručně opravit')
+        else {
+          f= cle.Dar[fld];
+          f.set(old); f.change()
+        }
+      }
+    },
+    button zpet [500,530,,] { title:'Zpět', skill:'hdde|hdde'
+      func onclick() { panel.close(0) } }
+  }
+}

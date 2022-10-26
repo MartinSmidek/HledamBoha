@@ -1,0 +1,1059 @@
+# Aplikace HledámBoha
+# (c) 2022 Martin Šmídek <martin@smidek.eu>
+
+# =======================================================================================> Potvrzení 
+# generování potvrzení pro zaslání mailem
+
+# ----------------------------------------------------------------------==> . inicializace
+func onfirstfocus() { }
+# ----------------------------------------------------------------------==> . lokální
+const obeslatelny_clen= "LEFT(c.deleted,1)!='D' AND c.umrti='0000-00-00' "
+var posilame:text,              // posilame=potvrzeni|vyzva
+    curr_clen:number,
+    rok:number,                 // rok potvrzení
+    cond:text, having:text,     // aktuální podmínka pro potvrzeni.cleni
+    count:number,               // počet generovaných potvrzení
+    mode:text,                  // postou | mailem | davka
+    davka={faze:0},             // {faze,todo,done,errors} synchronní s tabulkou davka
+    cast_sablony: object
+    
+use ii: form right [12,4,,]
+use d: form _d [10,100,,] {format:'n'}
+use r: form _r [10,100,,] {format:'n'}
+# ----------------------------------------------------------------------==> . menu
+menu m {type:'left', format:'f+', active:*
+  menu {title:'Daňová potvrzení',type:'group'
+    item {title:'[fa-send-o] potvrzení mailem jednotlivě' par:{c:'potv_mailem'}}
+    item {title:'[fa-send] potvrzení mailem dávkou'       par:{c:'potv_davkou'}}
+    item {title:'[fa-edit] úprava vzoru textu potvrzení'  par:{c:'potv_uprava'} }
+    item {title:'[fa-edit] úprava vzoru průvodního mailu' par:{c:'potv_pruvodni'} }
+    func onclick (i:ezer) {
+      clear(); ii.header(i);
+      EditMail.hide(); Sablona.hide(); 
+      switch (i.par.c) {
+      case 'potv_mailem':
+        d.display(1); r.display(0);
+        ii.fill('',
+         `Jsou zobrazeni jen dárci s platnou (doufejme) emailovou adresou.
+          <br>Konkrétního dárce je třeba zvolit kliknutím, dvojklik přejde do Členové `);
+        Init('mailem');
+        break;
+      case 'potv_davkou':
+        d.display(1); r.display(0);
+        Init('potvr.davkou');
+        break;
+      case 'potv_uprava': 
+        d.display(0); r.display(0); ii.fill('',' ');
+        EditMail.Init('N');  
+        if (!match('{rok}',EditMail.d.obsah)) alert('vzor potvrzení musí obsahovat {rok}');
+        if (!match('{castka}',EditMail.d.obsah)) alert('vzor potvrzení musí obsahovat {castka}');
+        if (!match('{darce}',EditMail.d.obsah)) alert('vzor potvrzení musí obsahovat {darce');
+        break;
+      case 'potv_pruvodni': 
+        d.display(0); r.display(0); ii.fill('',' ');
+        EditMail.Init('pruvodni_mail');  
+        break;
+      }
+    }
+  }
+  menu {title:'Šablona PDF potvrzení',type:'group'
+    item {title:'[fa-cogs] hlavička - logo'               ,par:{druh:'N',name:'logo'} }
+    item {title:'[fa-cogs] hlavička - společnost'         ,par:{druh:'N',name:'hlavicka'} }
+    item {title:'[fa-cogs] odeslano'                      ,par:{druh:'N',name:'odeslano'} }
+    item {title:'[fa-cogs] adresa'                        ,par:{druh:'N',name:'adresa'} }
+    item {title:'[fa-cogs] text'                          ,par:{druh:'N',name:'text'} }
+    item {title:'[fa-cogs] patička'                       ,par:{druh:'N',name:'paticka'} }
+    item {title:'[fa-print] ukázkový tisk šablony'        ,par:{druh:'N',name:'nahled'} 
+      func onclick (i:ezer) {
+        d.display(0); r.display(0);
+        Sablona.hide();
+        ii.header(i);
+        ii.fill('',php.dop_sab_nahled(i.par.druh))
+    }}
+    func onclick (i:ezer) {
+      d.display(0); r.display(0);
+      cast_sablony= php.dop_sab_cast(i.par.druh,i.par.name);
+      ii.header(i);
+      Sablona.popup(0,90);
+    }
+  }
+//  menu {title:'Výzvy a jiná PR',type:'group'
+//    item {title:'[fa-send] výzva mailem dávkou'
+//      func onclick (i:ezer) {
+//        clear(); 
+//        EditMail.hide(); Sablona.hide(); 
+//        ii.fill("Zaslání výzvy dávkou",'');
+//        Init('vyzva.davkou');
+//    }}
+//    item {title:'[fa-edit] úprava textu průvodního mailu'
+//      func onclick (i) { clear(); EditMail.Init(3); 
+//    }}
+//  }
+}
+
+/* v režimu "dávkou" je celé zpracování řízeno stavem tabulky davka 
+ * ve fázi f jsou tlačítka s vyšší fází nepřístupná
+   f,d <= pokud uživatel klikne na f provede se popsaný test a pokud projde, přepne se na (f,d)
+   1   -> inicializace tabulek mail a davka, je možné změnit parametry
+   2,0 -> zablokování parametrů, kopie výběru členů do tabulky mail, zahájení kontroly @ => (2,n)
+   3,0 -> pokud se položky email v clen a mail neshodují, přechod na (1,0) 
+          pokud je shoda, start procesu generování potvrzení a těl mailů - zapisuje se jako (3,n)
+   4,0 -> pokud není vše vygenerováno dotaz, zda pokračovat nebo jít na (1)
+          pokud je shoda, start procesu rozesílání potvrzení - zapisuje se jako (4,n)
+   5,0 -> pokud není dotaz, zda pokračovat v (4,n) nebo jít jen s částečným rozeslání na (1) 
+          pokud je vše posláno přechod na (5,1) tj. konec
+*/
+
+func Init (_mode) { 
+  mode= _mode; 
+  switch(mode) {
+    case 'postou': // dávkově poštou
+      r.display(0); d.display(1); 
+      if (!d.odeslano) { d.odeslano= now(); }
+      alert('nyi'); 
+      break;
+    case 'mailem': // potvrzeníjednotlivě mailem
+      r.display(0); d.display(1); 
+      if (!d.odeslano) { d.odeslano= now(); }
+      d.display(0,'d'); d.display(1,'m'); 
+      d.fu.enable(1); d.enable(1,'p');
+      d.drok= 2;
+      rok= d.drok==1 ? fdate('Y') : (d.drok==2 ? fdate('Y')-1 : 0);
+      cond_show(); 
+      break;
+    case 'potvr.davkou': // potvrzení dávkově mailem 
+      r.display(0); d.display(1); 
+      posilame= 'potvrzeni';
+      DavkaLoad();
+      d.odeslano= davka.par_odeslano;
+      d.drok= davka.par_drok;
+      rok= davka.par_drok==1 ? fdate('Y') : (davka.par_drok==2 ? fdate('Y')-1 : 0);
+      d.vcetne= davka.par_vcetne;
+      d.display(0,'m|t'); d.display(1,'d$'); 
+      d.jeFaze(davka.faze,davka.done,davka.errors); 
+      break;
+    case 'vyzva.davkou': // výzvy dávkově mailem 
+      d.display(0); r.display(1);
+      posilame= 'vyzva';
+      DavkaLoad();
+      r.odeslano= davka.par_odeslano;
+      r.display(0,'m|t'); r.display(1,'d$'); 
+      r.jeFaze(davka.faze,davka.done,davka.errors); 
+      break;
+  }
+//    panel.popup(10,100); 
+}
+func DavkaShow(smer) { 
+//    d.fd= `${smer} krok:${davka.faze} todo:${davka.todo} done:${davka.done} err:${davka.errors}`; 
+//    echo(debug(davka,smer));
+}
+func DavkaSave() { 
+  php.mail_davka_put(davka); DavkaShow('S');
+}
+func DavkaLoad() { 
+  davka= php.mail_davka_get();
+  if (!davka) DavkaInit();
+  Sender.f.from= davka.par_from;
+  Sender.f.name= davka.par_name;
+  Sender.f.test= davka.par_test;
+  Sender.f.smtp.key(davka.par_smtp);
+  DavkaShow('L');
+}
+func DavkaInit() { var smtp:object 
+  smtp= json_decode(php.select('hodnota','_cis',"druh='smtp_srv' AND data=1"));
+  davka= {
+    posilame:posilame,id_davka:1,faze:1,done:0,errors:0,
+    par_from:smtp.From, // "klub@telepace.cz";
+    par_name:smtp.FromName, // "Klub přátel";
+    par_test:sys('user','options','email'),
+    par_smtp:1};
+  switch (posilame) {
+    case 'potvrzeni': 
+      d.drok= 2; d.vcetne= 0; d.odeslano= now();
+      davka.par_odeslano= d.odeslano; 
+      davka.par_drok= d.drok;
+      davka.par_vcetne= d.vcetne; 
+      break;
+    case 'vyzva': 
+      r.odeslano= now();
+      davka.par_odeslano= r.odeslano; 
+      break;
+  }
+  DavkaSave();
+}
+func cond_show () { var jak:text
+  jak= " c.email!='' AND c.email NOT RLIKE '[\*#]' ";
+  cond= `${obeslatelny_clen} AND c.neposilat=0 AND ${jak} 
+         AND d.deleted='' AND YEAR(d.castka_kdy)=${rok} `;
+  having= d.vcetne ? "dary>0" : "dary>0 AND nepotvrzene>0";
+  d.cleni.browse_load(cond,"",having);
+  count= d.cleni.browse_count();
+  if (count) {
+    d.cleni.browse_focus(); 
+    curr_clen= d.cleni.id_clen; 
+    d.reselect(curr_clen)
+  }
+  else {
+    curr_clen= 0;
+    d.dary.browse_init(); 
+  }
+}
+# -------------------------------------------------------------------------==> . d
+form _d [,,200,250] {
+  # obecné funkce
+  func reselect (idc) { var cond_dary:text
+    cond_dary= ` AND YEAR(castka_kdy)=${rok}`;
+    dary.browse_load(`LEFT(deleted,1)!='D' AND id_clen=${idc} ${cond_dary}`);
+  }
+/* celé zpracování je řízeno stavem tabulky davka 
+* ve fázi f jsou tlačítka s vyšší fází nepřístupná
+ f,d <= pokud uživatel klikne na f provede se popsaný test a pokud projde, přepne se na (f,d)
+ 1   -> inicializace tabulek mail a davka, je možné změnit parametry, seznam=členi+dary
+ 2,0 -> zablokování parametrů, kopie výběru členů do tabulky mail, zahájení kontroly @ => (2,n)
+ 3,0 -> pokud se položky email v clen a mail neshodují, přechod na (1,0) 
+        pokud je shoda, start procesu generování potvrzení a těl mailů - zapisuje se jako (3,n)
+ 4,0 -> pokud není vše vygenerováno dotaz, zda pokračovat nebo jít na (1)
+        pokud je shoda, start procesu rozesílání potvrzení - zapisuje se jako (4,n)
+ 5,0 -> pokud není dotaz, zda pokračovat v (4,n) nebo jít jen s částečným rozeslání na (1) 
+        pokud je vše posláno přechod na (5,1) tj. konec
+*/
+  func jeFaze(f,d,e) { var pocet:number // zobrazení aktuálního stavu 
+    davka.done= f?d:0; davka.errors= f?e:0; davka.faze= f?f:1; davka.last= 0;
+    form.display(0,'d.'); 
+    f2a.enable(0); 
+    switch (davka.faze) {
+      case 1: // inicializace
+        DavkaInit();
+        ii.fill('',`Obeslané dárce je třeba zvolit volbou typu potvrzení (nevyplněný typ je
+            chápán jako "Obvykle")a dalšími parametry. 
+            <br>- Hromadné dary jsou podloženy červeně, složené fialově, do potvrzení započteny nebudou.
+            <br>Dvojklik na dárci přejde do Klub/Členové.`);
+        fu.enable(1); form.enable(1,'p');
+        f2.enable(1); f3.enable(0); f4.enable(0); f5.enable(0);
+        form.display(1,`d1`); 
+        cond_show(); 
+        break;
+      case 2: // proces kontroly adres
+        DavkaSave();
+        fu.enable(0); form.enable(0,'p');
+        f2.enable(1); f3.enable(0); f4.enable(0); f5.enable(0);
+        form.display(1,`d2`); 
+        if (davka.errors) {
+          maily.browse_load(`m.msg!=''`);
+          f2a.enable(1); 
+          ii.fill('',`v zobrazených mailových adresách jsou problémy - dvojklik přejde do Členové,
+              kde je třeba chybu opravit nebo mail zneplatnit zapsáním # na začátek 
+              mailové adresy.<br><br>
+              Po provedení oprav znovu proveďte krok 2, pro změnu parametrů se vraťe na krok 1.
+              Také je možné všechny chybné zneplatnit.`);
+        }
+        else {
+          maily.browse_load(1);
+          count= maily.browse_count();
+          ii.fill('',`V mailových adresách nebyly nalezeny chyby, je možné pokračovat krokem 3.`);
+          f2.enable(0); f3.enable(1); 
+        }
+        break;
+      case 3: // proces generování potvrzení 
+        DavkaSave();
+        form.display(1,`d2`); 
+        maily.browse_load(1);
+        count= maily.browse_count();
+        if (davka.done==davka.todo) {
+          ii.fill('','generování potvrzení skončilo, je možné rozesílat maily');
+          fu.enable(0); form.enable(0,'p');
+          f2.enable(0); f3.enable(0); f4.enable(1); f5.enable(0);
+        }
+        else {
+          ii.fill('','generování potvrzení ještě není dokončeno');
+          fu.enable(0); form.enable(0,'p');
+          f2.enable(0); f3.enable(1); f4.enable(0); f5.enable(0);
+        }
+        break;
+      case 4: // proces rozesílání 
+        DavkaSave();
+        form.display(1,`d2`); 
+        maily.browse_load(1);
+        count= maily.browse_count();
+        davka.todo= count;
+        davka.done= php.select('COUNT(*)','mail',"state IN (4)"); 
+        fu.enable(0); form.enable(0,'p');
+        f2.enable(0); f3.enable(0); f4.enable(1); f5.enable(0);
+        if (davka.done==count) {
+          ii.fill('','Všechna potvrzení byla rozeslána');
+        }
+        else {
+          pocet= php.select('COUNT(*)','mail',"state IN (5)"); 
+          ii.fill('',pocet
+            ? `Je třeba pokračovat v procesu rozesílání potvrzení
+              <br>${pocet} mailů se nepodařilo poslat - jsou označeny červeně (stav=5)`
+            : 'Je třeba pokračovat v procesu rozesílání potvrzení');
+        }
+        break;
+      case 5: 
+        break;
+    }
+  }
+  func Faze(f,d) { var y:object, ok:number // voláno po stisku tlačítka
+    clear();
+    switch (f) {
+      case 1:  // Inicializace
+        if (confirm('Budou smazány všechny dosud vygenerované maily a PDF, začneme znovu')) 
+          jeFaze(1,0,0);
+        break; 
+      case 2:  // kontrola adres
+        ii.fill('','Kontroluji maily - prosím počkejte na dokončení');
+        y= php.mail_verify('potvrzeni',cond,having);
+        jeFaze(2,y.done,y.errors);
+        break; 
+      case 3:  // generování potvrzování
+        if (davka.faze==2) {
+          if (confirm('zahájit generování potvrzení?')) {
+            davka.todo= davka.done; davka.cmd= 'gen'; davka.step= 10; davka.last= 0;
+            jeFaze(3,0,0);
+            Proces.Start('gen',"generování potvrzení");
+          }
+        }
+        elseif (davka.faze==3) { // pokračujeme
+          jeFaze(3,davka.done,0);
+          Proces.Start('gen',"rozesílání potvrzení");
+        }
+        jeFaze(davka.faze,davka.done,davka.errors);
+        break; 
+      case 4:  // rozesílání mailů
+          jeFaze(4,0,0);
+          if (davka.done<count) {
+            ok= Sender.modal();
+            echo('ok=',ok);
+            if (ok) {
+              Proces.Start('send',"rozesílání potvrzení");
+              jeFaze(4,0,0);
+            }
+          }
+        break; 
+      case 5: // konec
+        break;
+    }
+  }
+
+  # seznamy členů a darů
+  view c: table clen
+  view d: table dar {join:'USING (id_clen)'}
+  view cm: table mail {join_type:'LEFT', join:'USING (id_clen)'}
+  browse cleni [4,0,200,240] {tag:'m,d1', rows:11, qry_rows:1, group_by:'id_clen'
+    show id_clen [,,45,] { title:'člen', data:c.id_clen, format:'rq=s+' }
+    show jmeno [,,48,] { title:'jméno', data:c.jmeno, format:'q*s' }
+    show prijmeni [,,85,] { title:'příjmení', data:c.prijmeni, format:'q*s' }
+    show email [,,100,] { title:'email', data:c.email, format:'tq*s' }
+    show dary [,,60,] { title:'&sum; darů', 
+      expr:"SUM(d.castka)", format:'q*sr' }
+    show msg [,,90,] { title:'problém', data:cm.msg, format:'tq*s' } 
+    show nepotvrzene { expr:"SUM(IF(!d.potvrz_kdy,d.castka,0))" }
+    func onrowclick () { curr_clen= id_clen; reselect(curr_clen) }
+    # -------------------------------------==> . kontextové menu
+    menu { type:'context'
+      item { title:'ukázat dárce'
+        func onclick () {  if (id_clen) klu.cle.show_clen(id_clen); }}
+    }
+  }
+  browse dary [4,250,503,208] { tag:'m,d1', rows:10, 
+    show dne [,,70,] { title:'dne', data:dar.castka_kdy, format:'rfs-' }
+    show zpusob [,,60,] { title:'jak', data:dar.zpusob, map_pipe:cis_zpusob.hodnota }
+    show nucet [,,20,] { title:'ú', data:dar.nas_ucet, map_pipe:cis_ucet.zkratka }
+    show castka [,,65,] { title:'částka', data:dar.castka, format:'rfs' }
+    show ucet [,,150,] { title:'účet', data:dar.ucet, format:'fs' }
+    show datum_p [,,70,] { title:'potvrzeno', data:dar.potvrz_kdy, format:'rfs' }
+    show iddar [,,0,] { data:dar.id_dar, format:'rfs' }
+    func onrowclick () { }
+  }
+
+  # seznamy mailů
+  view m: table mail
+  view md: table dopis {join_type:'LEFT', join:'USING (id_dopis)'}
+  browse maily [4,0,200,240] {tag:'d2', rows:11, qry_rows:1
+      css_rows:'state,1:modra,3:zluta,4:zelena,5:cervena'
+    show id_clen [,,45,] { title:'člen', data:m.id_clen, format:'rq=s+' }
+    show jmeno [,,48,] { title:'jméno', data:m.jmeno, format:'q*s' }
+    show prijmeni [,,85,] { title:'příjmení', data:m.prijmeni, format:'q*s' }
+    show email [,,120,] { title:'email', data:m.email, format:'tq*s' }
+    show dary [,,60,] { title:'dary', data:m.dary, format:'q*sr' }
+    show state [,,40,] { title:'stav', data:m.state, format:'ctq*s' } 
+    show msg [,,70,] { title:'problém', data:m.msg, format:'tq*s' } 
+    show priloha { data:m.priloha } 
+    show body { data:m.body } 
+    show nazev { data:md.nazev } 
+    func onrowclick () { 
+      curr_clen= id_clen; 
+      switch (state) {
+        case '0': see= 'mail ještě nebyl vygenerován'; break;
+        case '1': see= 'připravený mail ještě nebyl poslán<hr>'; break;
+        case '3': see= 'mail je připraven k novému pokusu o poslání<hr>'; break;
+        case '4': see= 'mail byl úspěšně odeslán<hr>'; break;
+        case '5': see= `při pokusu odeslat mail vznikla chyba: ${msg}<hr>`; break;
+        default: see= '???';
+      }
+      if (state) see= `${see}<b>Příloha</b>: 
+                        <a href='docs/mailem_${rok}/${priloha}' target='pdf'>${priloha}</a>
+                        <br><br><b>Komu</b>: ${email}
+                        <br><br><b>Předmět</b>: ${nazev}
+                        <hr>${body}`; 
+
+    }
+//    func onsubmit () { klu.cln.show_clena(id_clen) }
+    menu { type:'context'
+      item { title:'zvolený chybný poslat znovu'
+        func onclick() { 
+          php.query(`UPDATE mail SET state=3 WHERE state=5 AND id_clen=${id_clen}`);
+          jeFaze(4,0,0) } }
+      item { title:'všechny chybné poslat znovu'
+        func onclick() { 
+          php.query(`UPDATE mail SET state=3 WHERE state=5`);
+          jeFaze(4,0,0) } }
+     }
+  }
+
+  # obecná parametrizace
+  label [521,0,162,158] { css:'ae_parm' }
+  label [530,9,120,20] { title:'datum odeslání' }
+  field odeslano [530,29,73,18]  { tag:'p', data:dopis.datum, format:'rt' 
+    func onchanged() { if (mode=='davkou') { davka.par_odeslano= this; DavkaSave(); }}}
+  label [530,59,120,50] { title:"vypsat potvrzení na" }
+  radio drok [530,79,120,49] { tag:'p', style:'border:1px solid #ddd', format:'t', value:'2'
+    case [0, 0,100,16] { title:'letošní dary', expr:'1' }
+    case [0,23,100,16] { title:'loňské dary', expr:'2' }
+    func onchange () {
+      rok= this==1 ? fdate('Y') : (this==2 ? fdate('Y')-1 : 0);
+      if (mode=='davkou') {
+        davka.par_drok= this;
+        DavkaSave();
+      }
+      cond_show();
+    }}
+  check vcetne [530,133,120,] { tag:'p', title:'poslat znovu', format:'t', value:'0'
+      help:'poslat znovu pokud je byť jeden nepotvrzený dar'
+    func onchange () {  if (mode=='davkou') { davka.par_vcetne= this; DavkaSave()}; cond_show() }}
+
+  # rozesílání jednotlivě mailem ==> .. mailem
+  label [521,176,162,81] { tag:'m', css:'ae_parm' }
+  label [530,181,120,20] { tag:'m', title:'jednotlivě mailem' }
+  button [530,200,,] { tag:'m', title:'[fa-send-0] ukázat, případně poslat', help:'jednotlivé poslání s kontrolou'
+    func onclick () { clear(); SendMail.Init('pruvodni_mail',odeslano,cleni.id_clen,cleni.dary,rok);
+  }}
+  button [530,230,,] { tag:'m', title:'[fa-edit] upravit vzor dopisu', help:'úprava dopisu ID=0'
+    func onclick () { clear(); EditMail.Init('pruvodni_mail');
+  }}
+
+  # rozesílání mailem dávkově ==> .. dávkou
+  label [521,176,162,290] { tag:'d', css:'ae_parm' }
+  label [530,181,160,20] { tag:'d', title:'potvrzení dávkou mailem' }
+//    label fd [522,407,162,30] { tag:'d', title:'krok 1/0' }
+  label see [4,250,503,*] { tag:'d2', style:"border:1px solid navy;overflow:auto" }
+  button fu [530,200,,] { tag:'d', title:'[fa-edit] upravit vzor dopisu', help:'úprava dopisu ID=0'
+    func onclick () { EditMail.Init('pruvodni_mail') }}
+  button f1 [530,230,,] { tag:'d', title:'1. zahájení', help:'začátek rozesílání'
+    func onclick () { Faze(1,0) }}
+  button f2 [530,260,,] { tag:'d', title:'2. kontrola adres', help:'zjištění korektnosti adres'
+    func onclick () { Faze(2,0); }}
+  button f2a [544,290,,] { tag:'d', title:'... zneplatnit chybné', help:'zapíše na začátek #'
+    func onclick () { 
+      php.query("UPDATE clen AS c JOIN mail AS m USING (id_clen) SET c.email=CONCAT('#',c.email) WHERE m.msg!=''"); 
+      Faze(2,0) }}
+  button f3 [530,320,,] { tag:'d', title:'3. generování potvrzení', help:'generování PDF příloh mailů'
+    func onclick () { Faze(3,0); }}
+  button f4 [530,350,,] { tag:'d', title:'4. rozesílání mailů', help:'postupné rozesílání a zápis o odeslání'
+    func onclick () { Faze(4,0); }}
+  button f4a [544,380,,] { tag:'d', title:'... označit nedoručené', help:'projde vrácené maily v docs/delivery_errors'
+    func onclick () { var ret:object
+      clear(); ret= php.mail_delivery_error(davka); echo(debug(ret));
+  }}
+  button f4b [544,410,,] { tag:'d', title:'... doručíme jinak', 
+      help:"před email dá znaky ## a přesune potvrzení do podsložky 'postou'"
+    func onclick () { var rok:number
+      rok= drok==1 ? fdate('Y') : (drok==2 ? fdate('Y')-1 : 0);
+      if (confirm(`dárcům v červeně označených řádcích se před email dá ##
+            a soubor PDF s potvrzením se přesune do podsložky 'postou' `))
+        alert(php.mail_oprav_mail_potvrzeni(davka));
+  }}
+  button f5 [530,440,,] { tag:'d', title:'5. ukončení', help:'závěrečná kontrola'
+    func onclick () { Faze(5,0); }}
+
+  # legenda
+  label [521,480,200,40] { tag:'d', title:"
+        <span class='modra'>připraven</span> 
+        <span class='zelena'>odeslán</span>
+        <span class='zluta'>znovu</span>
+        <span class='cervena'>chyba</span>" 
+  }
+}
+# -------------------------------------------------------------------------==> . r = výzvy
+form _r [,,200,250] {
+  var cond:text
+  # obecné funkce
+  func cond_show_r () { var komu: number
+    cond= `${obeslatelny_clen} AND c.email RLIKE '^[^*#]+'`;
+    r.cleni.browse_load(cond);
+    count= r.cleni.browse_count();
+    if (count) {
+      r.cleni.browse_focus(); 
+      curr_clen= r.cleni.id_clen; 
+    }
+    else {
+      curr_clen= 0;
+    }
+  }
+//  func reselect (idc) { var cond_dary:text
+//    cond_dary= ` AND YEAR(datum)=${rok}`;
+//    dary.browse_load(`LEFT(deleted,1)!='D' AND id_clen=${idc} ${cond_dary}`);
+//  }
+/* celé zpracování je řízeno stavem tabulky davka 
+* ve fázi f jsou tlačítka s vyšší fází nepřístupná
+ f,d <= pokud uživatel klikne na f provede se popsaný test a pokud projde, přepne se na (f,d)
+ 1   -> inicializace tabulek mail a davka, je možné změnit parametry, seznam=členi+dary
+ 2,0 -> zablokování parametrů, kopie výběru členů do tabulky mail, zahájení kontroly @ => (2,n)
+ 3,0 -> pokud se položky email v clen a mail neshodují, přechod na (1,0) 
+        pokud je shoda, start procesu generování výzvy a těl mailů - zapisuje se jako (3,n)
+ 4,0 -> pokud není vše vygenerováno dotaz, zda pokračovat nebo jít na (1)
+        pokud je shoda, start procesu rozesílání výzvy - zapisuje se jako (4,n)
+ 5,0 -> pokud není dotaz, zda pokračovat v (4,n) nebo jít jen s částečným rozeslání na (1) 
+        pokud je vše posláno přechod na (5,1) tj. konec
+*/
+  func jeFaze(f,d,e) { var pocet:number // zobrazení aktuálního stavu 
+    davka.done= f?d:0; davka.errors= f?e:0; davka.faze= f?f:1; davka.last= 0;
+    DavkaSave();
+    form.display(0,'d.'); 
+    f2a.enable(0); 
+    switch (davka.faze) {
+      case 1: // inicializace
+        DavkaInit();
+        ii.fill('',`Dvojklik na KaNoe přejde do Klub/Členové.`);
+        form.enable(1,'p');
+        f2.enable(1); f3.enable(0); f4.enable(0); f5.enable(0);
+        form.display(1,`d1`); 
+        cond_show_r(); 
+        break;
+      case 2: // proces kontroly adres
+        form.enable(0,'p');
+        f2.enable(1); f3.enable(0); f4.enable(0); f5.enable(0);
+        form.display(1,`d2`); 
+        if (davka.errors) {
+          maily.browse_load(`m.msg!=''`);
+          f2a.enable(1); 
+          ii.fill('',`v zobrazených mailových adresách jsou problémy - dvojklik přejde do Členové,
+              kde je třeba chybu opravit nebo mail zneplatnit zapsáním # na začátek 
+              mailové adresy.<br><br>
+              Po provedení oprav znovu proveďte krok 2, pro změnu parametrů se vraťe na krok 1.
+              Také je možné všechny chybné zneplatnit.`);
+        }
+        else {
+          maily.browse_load(1);
+          count= maily.browse_count();
+          ii.fill('',`V mailových adresách nebyly nalezeny chyby, je možné pokračovat krokem 3.`);
+          f2.enable(0); f3.enable(1); 
+        }
+        break;
+      case 3: // proces generování výzvy 
+        form.display(1,`d2`); 
+        maily.browse_load(1);
+        count= maily.browse_count();
+        if (davka.done==davka.todo) {
+          ii.fill('','generování výzvy skončilo, je možné rozesílat maily');
+          form.enable(0,'p');
+          f2.enable(0); f3.enable(0); f4.enable(1); f5.enable(0);
+        }
+        else {
+          ii.fill('','generování výzvy ještě není dokončeno');
+          form.enable(0,'p');
+          f2.enable(0); f3.enable(1); f4.enable(0); f5.enable(0);
+        }
+        break;
+      case 4: // proces rozesílání 
+        form.display(1,`d2`); 
+        maily.browse_load(1);
+        count= maily.browse_count();
+        davka.todo= count;
+        davka.done= php.select('COUNT(*)','mail',"state IN (4)"); 
+        form.enable(0,'p');
+        f2.enable(0); f3.enable(0); f4.enable(1); f5.enable(0);
+        if (davka.done==count) {
+          ii.fill('','Všechny výzvy byla rozeslána');
+        }
+        else {
+          pocet= php.select('COUNT(*)','mail',"state IN (5)"); 
+          ii.fill('',pocet
+            ? `Je třeba pokračovat v procesu rozesílání výzvy
+              <br>${pocet} mailů se nepodařilo poslat - jsou označeny červeně (stav=5)`
+            : 'Je třeba pokračovat v procesu rozesílání výzvy');
+        }
+        break;
+      case 5: 
+        break;
+    }
+  }
+  func Faze(f,d) { var y:object, ok:number // voláno po stisku tlačítka
+    clear();
+    switch (f) {
+      case 1:  // Inicializace
+        if (confirm('Budou smazány všechny dosud vygenerované maily a PDF, začneme znovu')) 
+          jeFaze(1,0,0);
+        break; 
+      case 2:  // kontrola adres
+        ii.fill('','Kontroluji maily - prosím počkejte na dokončení');
+        y= php.mail_verify('vyzva',cond,'');
+        jeFaze(2,y.done,y.errors);
+        break; 
+      case 3:  // generování výzvy
+        if (davka.faze==2) {
+          if (confirm('zahájit generování výzvy?')) {
+            davka.todo= davka.done; davka.cmd= 'gen-river'; davka.step= 10; davka.last= 0;
+            davka.reky_radit= radit; davka.reky_narozeniny= narozeniny;
+            jeFaze(3,0,0);
+            Proces.Start('gen-river',"generování výzvy");
+          }
+        }
+        elseif (davka.faze==3) { // pokračujeme
+          jeFaze(3,davka.done,0);
+          Proces.Start('gen-river',"rozesílání výzvy");
+        }
+        jeFaze(davka.faze,davka.done,davka.errors);
+        break; 
+      case 4:  // rozesílání mailů
+          jeFaze(4,0,0);
+          if (davka.done<count) {
+            ok= Sender.modal();
+            echo('ok=',ok);
+            if (ok) {
+              Proces.Start('send-river',"rozesílání výzvy");
+              jeFaze(4,0,0);
+            }
+          }
+        break; 
+      case 5: // konec
+        break;
+    }
+  }
+
+  # seznamy členů a darů
+  view c: table clen
+  view d: table dar {join:'USING (id_clen)'}
+  view cm: table mail {join_type:'LEFT', join:'USING (id_clen)'}
+  browse cleni [4,0,200,240] {tag:'m,d1', rows:11, qry_rows:1, group_by:'id_clen'
+    show id_clen [,,45,] { title:'člen', data:c.id_clen, format:'rq=s+' }
+    show jmeno [,,48,] { title:'jméno', data:c.jmeno, format:'q*s' }
+    show prijmeni [,,85,] { title:'příjmení', data:c.prijmeni, format:'q*s' }
+    show email [,,160,] { title:'email', data:c.email, format:'tq*s' }
+    show msg [,,90,] { title:'problém', data:cm.msg, format:'tq*s' } 
+    show nepotvrzene { expr:"SUM(IF(!d.datum_p,d.castka,0))" }
+    func onrowclick () { curr_clen= id_clen; }
+//    func onsubmit () { klu.cln.show_clena(id_clen) }
+    # -------------------------------------==> . kontextové menu
+    menu { type:'context'
+      item { title:'ukázat dárce'
+        func onclick () {  if (id_clen) klu.cle.show_clen(id_clen); }}
+    }
+  }
+
+  # seznamy mailů
+  view m: table mail 
+  view md: table dopis {join_type:'LEFT', join:'USING (id_dopis)'}
+  browse maily [4,0,200,240] {tag:'d2', rows:11, qry_rows:1
+      css_rows:'state,1:modra,3:zluta,4:zelena,5:cervena'
+    show id_clen [,,45,] { title:'člen', data:m.id_clen, format:'rq=s+' }
+    show jmeno [,,48,] { title:'jméno', data:m.jmeno, format:'q*s' }
+    show prijmeni [,,85,] { title:'příjmení', data:m.prijmeni, format:'q*s' }
+    show email [,,180,] { title:'email', data:m.email, format:'tq*s' }
+    show state [,,40,] { title:'stav', data:m.state, format:'ctq*s' } 
+    show msg [,,70,] { title:'problém', data:m.msg, format:'tq*s' } 
+    show priloha { data:m.priloha } 
+    show body { data:m.body } 
+    show nazev { data:md.nazev } 
+    func onrowclick () { 
+      curr_clen= id_clen; 
+      switch (state) {
+        case '0': see= 'mail ještě nebyl vygenerován'; break;
+        case '1': see= 'připravený mail ještě nebyl poslán<hr>'; break;
+        case '3': see= 'mail je připraven k novému pokusu o poslání<hr>'; break;
+        case '4': see= 'mail byl úspěšně odeslán<hr>'; break;
+        case '5': see= `při pokusu odeslat mail vznikla chyba: ${msg}<hr>`; break;
+        default: see= '???';
+      }
+      if (state) {
+        see= `${see}<b>Příloha</b>: 
+              <a href='docs/mailem_reky/${priloha}' 
+                target='pdf'>${priloha}</a>
+              <br><br><b>Komu</b>: ${email}
+              <br><br><b>Předmět</b>: ${nazev}
+              <hr>${body}`; 
+      }
+    }
+//    func onsubmit () { klu.cln.show_clena(id_clen) }
+    menu { type:'context'
+      item { title:'zvolený chybný poslat znovu'
+        func onclick() { 
+          php.query(`UPDATE mail SET state=3 WHERE state=5 AND id_clen=${id_clen}`);
+          jeFaze(4,0,0) } }
+      item { title:'všechny chybné poslat znovu'
+        func onclick() { 
+          php.query(`UPDATE mail SET state=3 WHERE state=5`);
+          jeFaze(4,0,0) } }
+     }
+  }
+
+  # obecná parametrizace
+  label [518,0,171,158] { css:'ae_parm' }
+  label [530,12,120,10] { title:'datum odeslání' }
+  field odeslano [530,29,73,18]  { tag:'p', data:dopis.datum, format:'rt' 
+    func onchanged() { if (mode=='davkou') { davka.par_odeslano= this; DavkaSave(); }}}
+
+  label [524,58,162,31] {title:'V řece budou vytištěni úplně všichni, řadit se bude' }
+  radio radit [522,70,175,] { format:'t', value:'2'
+    case [0,21,168,] {title:'podle jména,bydliště', expr:'1' }
+    case [0,39,168,] {title:'podle PSČ,jména,bydliště', expr:'2' }
+  }
+  check narozeniny [523,133,162,] { title:'přidat narozeniny' format:'t' value:'0' }
+  
+  # rozesílání jednotlivě mailem ==> .. mailem
+  label [521,176,162,81] { tag:'m', css:'ae_parm' }
+  label [530,181,120,20] { tag:'m', title:'jednotlivě mailem' }
+  button [530,200,,] { tag:'m', title:'[fa-send-0] ukázat, případně poslat', help:'jednotlivé poslání s kontrolou'
+    func onclick () { clear(); 
+//      SendMail.Init_reky('pruvodni_mail',odeslano,cleni.id_clen);
+  }}
+  button [530,230,,] { tag:'m', title:'[fa-edit] upravit vzor dopisu', help:'úprava dopisu ID=0'
+    func onclick () { clear(); EditMail.Init('pruvodni_mail');
+  }}
+
+  # rozesílání mailem dávkově ==> .. dávkou
+  label [519,176,169,214] { tag:'d', css:'ae_parm' }
+  label [530,186,150,17] { tag:'d', title:'výzvy dávkou mailem' }
+//    label fd [522,407,162,30] { tag:'d', title:'krok 1/0' }
+  label see [4,250,503,*] { tag:'d2', style:"border:1px solid navy;overflow:auto" }
+//  button fu [530,200,,] { tag:'d', title:'[fa-edit] upravit vzor dopisu', help:'úprava dopisu ID=3'
+//    func onclick () { EditMail.Init('pruvodni_mail') }}
+  button f1 [530,212,,] { tag:'d', title:'1. zahájení', help:'začátek rozesílání'
+    func onclick () { Faze(1,0) }}
+  button f2 [530,242,,] { tag:'d', title:'2. kontrola adres', help:'zjištění korektnosti adres'
+    func onclick () { Faze(2,0); }}
+  button f2a [544,272,,] { tag:'d', title:'... zneplatnit chybné', help:'zapíše na začátek #'
+    func onclick () { 
+      php.query("UPDATE clen AS c JOIN mail AS m USING (id_clen) SET c.email=CONCAT('#',c.email) WHERE m.msg!=''"); 
+      Faze(2,0) }}
+  button f3 [530,302,,] { tag:'d', title:'3. generování výzvy', help:'generování PDF příloh mailů'
+    func onclick () { Faze(3,0); }}
+  button f4 [530,332,,] { tag:'d', title:'4. rozesílání mailů', help:'postupné rozesílání a zápis o odeslání'
+    func onclick () { Faze(4,0); }}
+//  button f4a [544,380,,] { tag:'d', title:'... označit nedoručené', help:'projde vrácené maily v docs/delivery_errors'
+//    func onclick () { var ret:object
+//      clear(); ret= php.mail_delivery_error(davka); echo(debug(ret));
+//  }}
+//  button f4b [544,410,,] { tag:'d', title:'... doručíme jinak', 
+//      help:"před email dá znaky ## a přesune potvrzení do podsložky 'postou'"
+//    func onclick () { var rok:number
+////      rok= drok==1 ? fdate('Y') : (drok==2 ? fdate('Y')-1 : 0);
+//      if (confirm(`dárcům v červeně označených řádcích se před email dá ##
+//            a soubor PDF s potvrzením se přesune do podsložky 'postou' `))
+//        alert(php.mail_oprav_mail_potvrzeni(davka));
+//  }}
+  button f5 [530,362,,] { tag:'d', title:'5. ukončení', help:'závěrečná kontrola'
+    func onclick () { Faze(5,0); }}
+
+  # legenda
+  label [521,414,180,29] { tag:'d', title:"
+        <span class='modra'>připraven</span> 
+        <span class='zelena'>odeslán</span>
+        <span class='zluta'>znovu</span>
+        <span class='cervena'>chyba</span>" 
+  }
+}
+# ==========================================================================================> sender
+panel Sender [0,0,290,160] { type:'popup', title:"Nastavení parametrů, test a start rozesílání"
+    par:{close:'no'} 
+  use f:form _f 
+  form _f {
+    field from [10,20,140,] { title:'^odesílací adresa', format:'d' 
+      func onchanged() { if (mode=='davkou') { davka.par_from= this; DavkaSave(); }}}
+    field name [10,40,140,] { format:'d' 
+      func onchanged() { if (mode=='davkou') { davka.par_name= this; DavkaSave(); }}}
+    select smtp [170,20,120,17] { type:'map' options:cis_smtp.zkratka
+        title:'^SMTP' help:'smtp|použitý odesílací server' format:'t' 
+      func onchanged() { if (mode=='davkou') { davka.par_smtp= this.key(); DavkaSave(); }}}
+    label [0,73,287,49] { css:'ae_parm' }
+    field test [10,91,200,] { title:'^adresa pro testovací mail', format:'t'  
+      func onchanged() { if (mode=='davkou') { davka.par_test= this; DavkaSave(); }}}
+    button [228,91,,] { title:'[fa-send-o] test', help:'odešle mail na osobní mail ke kontrole'
+      func onclick () { var ret:object
+        ret= posilame=='potvrzeni'
+          ? php.mail_single('test',smtp.key(),
+              'pruvodni_mail',d.maily.id_clen,d.maily.dary,rok,davka.par_odeslano)
+          : php.mail_single('test-vyzva',smtp.key(),
+              'pruvodni_reky',r.maily.id_clen,0,0,davka.par_odeslano);
+        if (!ret._error) { alert(ret._html); }
+        else alert(ret._error)
+    } }
+    button [3,136,,] { title:'[fa-send-o] Odeslat 1. připravený' func onclick() { 
+      davka.cmd= posilame=='potvrzeni' ? 'send' : 'send-river'; 
+      davka.step= 1; davka.last= 0;
+      DavkaSave();
+      php.mail_proces(); // funkce serveru čte a zapisuje stav z tabulky davka
+      DavkaLoad();
+      if (davka.last) {
+        if (posilame=='potvrzeni')
+          d.maily.browse_seek(`id_mail='${davka.last}'`);
+        else
+          r.maily.browse_seek(`id_mail='${davka.last}'`);
+      }
+    }}
+    button [152,136,,] { title:'[fa-send] Rozesílat' func onclick() { 
+      davka.cmd= posilame=='potvrzeni' ? 'send' : 'send-river'; 
+      davka.step= 10; davka.last= 0;
+      panel.hide(1);
+    }}
+    button [237,136,,] { title:'[fa-undo] Zpět' func onclick() { panel.hide(0)}}
+  }
+}
+# ==========================================================================================> proces
+# Proces.Start(cmd,title) 
+# proměnná davka navíc obsahuje davka.cmd pro switch v mail_proces a step:kroky na jeden průchod
+# z proměnné davka používá todo,done a přidává msg a případně error a 
+panel Proces [0,0,300,50] { type:'popup', 
+    par:{close:'no'} 
+  use it: form _it 
+  // stavové proměnné
+  var continue=1
+  // Start - odstartuje výpočet definovaný objektem par a zobrazí jeho průběh 
+  func Start(cmd,title) { 
+    clear(); 
+    panel.title= title;
+    // inicializace cyklu a předání prametrů - počáteční hodnota todo bude určena z par.todo
+    davka.cmd= cmd; 
+    DavkaSave();
+    // zahájení cyklu 
+    it.msg= ''; Show(davka.done,davka.todo); // nastaví termometr 
+    it.display(2,'t'); //it.display(0,'e'); 
+    fork.panel.Step(); // asynchronní spuštění, aby bylo provedeno panel.modal
+    panel.modal() 
+  }
+  // Step - jedny kroky procesu
+  func Step() { 
+    continue= 1; 
+    while (continue) {  // po Stop (třeba stisku Přerušit) se výpočet přeruší
+      php.mail_proces(); // funkce serveru čte a zapisuje stav z tabulky davka
+      DavkaLoad();
+      Show(davka.done,davka.todo); // nastaví termometr a případně provede refresh
+      if (davka.error) {
+        it.msg= `PŘERUŠENO -- CHYBA: ${davka.error}`; davka.error= '';
+        break;
+      }
+      elseif (!continue)
+        break;
+      it.msg= davka.msg;
+      if (davka.done>=davka.todo) {
+        it.display(0,'s|b'); it.display(1,'e'); // zruší zobrazení termometru
+        break;
+      }
+    }
+  }
+  // Show(cast,celek) - posune termometr
+  func Show(cast,celek) { 
+    it.thermo1.property(object('width',(cast*290)/celek));
+    if (davka.last) 
+      d.maily.browse_seek(`id_mail='${davka.last}'`);
+    else
+      d.maily.browse_refresh()
+  }
+  // Stop - zastaví a nechá zobrazené
+  func Stop() { continue= 0; }
+  form _it { 
+    label thermo1 [6,1,0,8]   { tag:'t', title:'' style:'background-color:#ef7f13' }
+    label thermo2 [5,0,290,8] { tag:'t', title:'' style:'border:1px dotted grey' }
+    label msg [0,15,300,40]   { tag:'t' format:'c' }
+    button [120,30,,]  { tag:'t,b', title:'Přerušit' func onclick () { 
+      form.display(0,'b'); form.display(1,'s');
+      DavkaLoad();
+      msg= `PŘERUŠENO UŽIVATELEM -- ${davka.msg}`;
+      continue= 0; 
+    } }
+    button [96,30,,]  { tag:'s', title:'Ukončit' func onclick () { 
+      continue= 0; panel.hide(1) } }
+    button [154,30,,]  { tag:'s', title:'Pokračovat' func onclick () { 
+      form.display(0,'s'); form.display(1,'b');
+      Step(); } }
+    button [136,30,,]  { tag:'e', title:'OK' func onclick () { 
+      panel.hide(1) } }
+  }
+}
+# =========================================================================================> proces2
+# znázornění dvoukrokového výpočtu
+#   1. x.call('fce')  ... kde x.fce spustí nějaký výpočet
+#   2. Proces.Start(informace o zahájení výpočtu)
+#   3. až x.fce skončí tak zavolá Proces.End(informace o konci výpočtu)
+panel Proces2 [0,0,300,50] { type:'popup', 
+    par:{close:'no'} 
+  func Start(_tit,_txt) { 
+    panel.title= _tit;
+    f.txt= _txt;            // počáteční zpráva
+    f.ok.enable(0);         // nelze stisknout Ok
+    panel.modal()           // a na nic nejde sahat
+}
+  func End(_txt) { 
+    f.txt= _txt;            // ukončující správa
+    f.ok.enable(1)          // a lze vzít na vědomí s Ok
+  }
+  use f: form _f
+  form _f {
+    label txt [0,0,300,30] { format:'c' }
+    button ok [142,33,,] { title:'Ok' func onclick() { panel.hide(1) }}
+  }
+}
+# =========================================================================================> šablona
+panel Sablona [0,0,645,520] { title:' Úprava šablony dopisu',
+  use cast: form _cast [0,0,,],
+  func onfocus () {
+    cast.load(cast_sablony.id_dopis_cast);
+    cast.ukazka= cast_sablony.obsah;
+  }
+  form _cast [,,700,447] {
+    label [55,4,100,17] { title:'zleva:' },
+    field l [94,1,33,17] { data:dopis_cast.l, format:'r' },
+    label [144,5,50,17] { title:'zhora:' },
+    field t [183,1,35,17] { data:dopis_cast.t, format:'r' },
+    label [55,29,100,17] { title:'šířka:' },
+    field w [96,28,33,17] { data:dopis_cast.w, format:'r' },
+    label [142,30,50,17] { title:'výška:' },
+    field h [183,28,35,17] { data:dopis_cast.h, format:'r' },
+    label [267,32,50,17] { title:'zarovnání:' },
+    field align [332,31,30,17] { data:dopis_cast.fattr },
+    label [239,4,100,17] { title:'velikost písma:' },
+    field fsize [332,3,31,17] { data:dopis_cast.fsize, format:'r' },
+    label [381,6,50,17] { title:'řádkování:' },
+    field ln [444,3,32,17] { data:dopis_cast.ln },
+    label [376,31,100,17] { title:'ohraničení:' },
+    field bord [444,29,33,17] { data:dopis_cast.bord, format:'' },
+    label [490,6,100,17] { title:'umístění:' },
+    field umisteni [550,2,16,17] { data:dopis_cast.umisteni, format:'' },
+    label [518,28,100,17] { title:'typ:' },
+    field typ [550,29,17,17] { data:dopis_cast.typ, format:'' },
+    label [23,59,100,17] { title:'text (html):' },
+    edit obsah [95,63,547,200] { data:dopis_cast.obsah },
+    label [23,275,640,17] { title:"<u>orientační</u> ukázka (přesná viz menu 'Ukázkové tisky šablon'):" },
+    label ukazka [23,295,640,500]
+    button uloz [590,0,,] { title:'Ulož'
+      func onclick () { form.save(); form.load() }
+    }
+  }
+}
+# ========================================================================================> editMail
+panel EditMail [0,0,660,530] { title:' Úprava textu mailu', type:'popup', css:'dialog'
+  use d: form _dopis [0,0,,],
+  func Init (typ) { var idd:number
+    idd= php.mail_pruvodni('seek',typ);
+    d.load(idd);
+    panel.modal(236,50)
+  }
+  # ----------------------------------------------------------------------------------------- _dopis
+  form _dopis [10,10,600,460] {
+    field [52,10,453,] { title:'Předmět', data:dopis.nazev }
+    label [517,0,141,33] { css:'ae_parm' }
+    button [532,8,,] { title:'Uložit', help:'ukončit editor a uložit změny'
+      func onclick() { form.save(); panel.hide(1); }
+    }
+    button  [598,8,,] { title:'Zpět', help:'ukončit editor bez uložení změn'
+      func onclick() { panel.hide(0); }
+    }
+    edit obsah [0,40,660,480] {type:'html', data:dopis.obsah, par:{toolbar:'EzerMail'} }
+  }
+}
+# ========================================================================================> sendMail
+panel SendMail [0,0,660,530] { title:' Kontrola a odeslání mailu', type:'popup', css:'dialog'
+  var dopis:text, dne:text,               // typ dopisu a den odeslání
+      idc:number, dary:number, rok:number // ID člena a jeho potvrzované dary za rok
+  use send: form _send [0,0,,]
+  func Init (_dopis,_dne,_idc,_dary,_rok) { var ret:object
+    dopis= _dopis; dne= _dne; idc= _idc; dary= _dary; rok= _rok;
+    ret= php.mail_single('html',send.smtp.key(),dopis,idc,dary,rok,dne);
+    send.jiny_darce= ret.darce;
+    send.jine_rc= ret.rc;
+    if (ret._error) 
+      alert(ret._error);
+    else {
+      send.kontrola= ret._html;
+      panel.modal(236,50);
+    }
+  }
+//  func Init_reky (_dopis,_dne,_idc) {}
+  # -------------------------------------------------------------------------------- _send
+  form _send [10,10,600,460] {
+    # ==> test, odeslání, výběr SMTP serveru 
+    label [0,10,658,38] { css:'ae_parm' }
+    select smtp [515,21,131,17] { type:'map' options:cis_smtp.zkratka
+      title:'odesílat přes server ' help:'smtp|použitý odesílací server' format:'t' }
+    button [15,20,,] { title:'[fa-send] pošli', 
+        help:'odešle poděkování mailem s potvrzením v příloze odesílateli'
+      func onclick () { var ret:object
+        ret= php.mail_single('send',smtp.key(),dopis,idc,dary,rok,dne);
+        if (!ret._error) { d.cleni.browse_refresh(); alert(ret._html); panel.hide(1); }
+        else alert(ret._error)
+    } }
+    button  [75,20,,] { title:'[fa-undo] Zpět', help:'ukončit bez odeslání'
+      func onclick() { panel.hide(0); }
+    }
+    button [166,20,,] { title:'[fa-send-o] test (pro mě)', 
+        help:'odešle mail na osobní mail ke kontrole'
+      func onclick () { var ret:object
+        ret= php.mail_single('test',smtp.key(),dopis,idc,dary,rok,dne);
+        if (!ret._error) { alert(ret._html); panel.hide(1); }
+        else alert(ret._error)
+    } }
+    # ==> změna dárce
+    label [389,72,267,160] { css:'ae_parm', style:"z-index:2"  }
+    label [404,80,238,20] { title:"jméno a adresa do potvrzení", style:"z-index:2" }
+    edit jiny_darce [400,95,240,64] { style:"z-index:2", format:'t' }
+    field jine_rc [401,181,238,] { style:"z-index:2", format:'t' }
+    label [404,167,238,20] { title:"IČ příp. datum narození do potvrzení", style:"z-index:2" }
+    button [459,206,,] { title:"přegeneruj potvrzení", style:"z-index:2"
+      func onclick() { var ret:object
+        ret= php.mail_single('html',send.smtp.key(),dopis,idc,dary,rok,dne,jiny_darce,jine_rc);
+        if (ret._error) alert(ret._error);
+        else send.kontrola= ret._html;
+    }}
+    # ==> text mailu pro kontrolu
+    label kontrola [0,74,660,452] 
+  }
+}
+# =========================================================================================> Šablona
+# popup - šablona hlavičkového papíru
+panel Sablona [0,0,*,*] { title:' Úprava šablony dopisu'
+  use cast: form _cast [0,0,,]
+  func onfocus () {
+    cast.load(cast_sablony.id_dopis_cast);
+    cast.ukazka= cast_sablony.obsah;
+  }
+  form _cast [,,700,447] {
+    label [55,4,100,17] { title:'zleva:' }
+    field l [94,1,33,17] { data:dopis_cast.l, format:'r' }
+    label [144,5,50,17] { title:'zhora:' }
+    field t [183,1,35,17] { data:dopis_cast.t, format:'r' }
+    label [55,29,100,17] { title:'šířka:' }
+    field w [96,28,33,17] { data:dopis_cast.w, format:'r' }
+    label [142,30,50,17] { title:'výška:' }
+    field h [183,28,35,17] { data:dopis_cast.h, format:'r' }
+    label [267,32,50,17] { title:'zarovnání:' }
+    field align [332,31,30,17] { data:dopis_cast.fattr }
+    label [239,4,100,17] { title:'velikost písma:' }
+    field fsize [332,3,31,17] { data:dopis_cast.fsize, format:'r' }
+    label [381,6,50,17] { title:'řádkování:' }
+    field ln [444,3,32,17] { data:dopis_cast.ln }
+    label [376,31,100,17] { title:'ohraničení:' }
+    field bord [444,29,33,17] { data:dopis_cast.bord, format:'' }
+    label [490,6,100,17] { title:'umístění:' }
+    field umisteni [550,2,16,17] { data:dopis_cast.umisteni, format:'' }
+    label [518,28,100,17] { title:'typ:' }
+    field typ [550,29,17,17] { data:dopis_cast.typ, format:'' }
+    label [23,59,100,17] { title:'text (html):' }
+    edit obsah [95,63,547,200] { data:dopis_cast.obsah }
+    label [23,275,640,17] { title:"<u>orientační</u> ukázka (přesná viz menu 'Ukázkové tisky šablon'):" }
+    label ukazka [23,295,640,500]
+    button uloz [590,0,,] { title:'[fa-save] Uložit'
+      func onclick () { form.save(); form.load() }
+    }
+  }
+}

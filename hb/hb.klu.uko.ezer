@@ -1,0 +1,185 @@
+# Aplikace HledámBoha
+# (c) 2022 Martin Šmídek <martin@smidek.eu>
+
+# ================================================================================================== ÚKOLY
+
+func onfirstfocus() {
+  m.g1.i.click()
+}
+
+func ukol_show(id_ukol,kdo,komu) {
+  panel.focus();
+  if (sys('user','id_user')==komu) m.g1.a.click();
+  elseif (sys('user','id_user')==kdo) m.g2.a.click();
+  elseif (has_skill('hduv')) m.g3.a.click();
+  else {
+    alert("detaily jsou přístupné pouze pro Vaše úkoly nebo pro úkoly Vámi zadané");
+    href('klu.cle');
+  }
+  ukoly.ukoly.browse_seek(`id_ukol=${id_ukol}`);
+}
+
+menu m {type:'left', active:*
+  menu g1 {title:'Moje úkoly',type:'group', _sys:'*'
+    item a {title:'přehled všech'         ,par:{cond:"kdo_pro=#I"} }
+    item i {title:'... nezrušených'       ,par:{cond:"kdo_pro=#I AND stav<3"} }
+    item {title:'... nezahájených'        ,par:{cond:"kdo_pro=#I AND stav=1 AND cas_bg='0000-00-00' AND cas_ok='0000-00-00'"} }
+    item {title:'... po termínu'          ,par:{cond:"kdo_pro=#I AND stav=1 AND cas_do<=NOW() AND cas_ok='0000-00-00'"} }
+    item {title:'... plněných'            ,par:{cond:"kdo_pro=#I AND stav=1 AND cas_bg!='0000-00-00' AND cas_ok='0000-00-00'"} }
+    item {title:'... splněných'           ,par:{cond:"kdo_pro=#I AND stav=1 AND cas_ok!='0000-00-00'"} }
+    item {title:'... odložených'          ,par:{cond:"kdo_pro=#I AND stav=2"} }
+    item {title:'... zrušených'           ,par:{cond:"kdo_pro=#I AND stav=3"} }
+  }
+  menu g2 {title:'Mnou zadané úkoly',type:'group', _sys:'*'
+    item a {title:'přehled všech'         ,par:{cond:"kdo_od=#I"} }
+    item {title:'... nezrušených'         ,par:{cond:"kdo_od=#I AND stav<3"} }
+    item {title:'... nezahájených'        ,par:{cond:"kdo_od=#I AND stav=1 AND cas_bg='0000-00-00' AND cas_ok='0000-00-00'"} }
+    item {title:'... po termínu'          ,par:{cond:"kdo_od=#I AND stav=1 AND cas_do<=NOW() AND cas_ok='0000-00-00'"} }
+    item {title:'... plněných'            ,par:{cond:"kdo_od=#I AND stav=1 AND cas_bg!='0000-00-00' AND cas_ok='0000-00-00'"} }
+    item {title:'... splněných'           ,par:{cond:"kdo_od=#I AND stav=1 AND cas_ok!='0000-00-00'"} }
+    item {title:'... odložených'          ,par:{cond:"kdo_od=#I AND stav=2"} }
+    item {title:'... zrušených'           ,par:{cond:"kdo_od=#I AND stav=3"} }
+  }
+  menu g3 {title:'Všechny úkoly',type:'group', _sys:'*', skill:'hduv|hduv'
+    item a {title:'přehled všech'         ,par:{cond:"1"} }
+    item {title:'... nezrušených'         ,par:{cond:"stav<3"} }
+    item {title:'... nezahájených'        ,par:{cond:"stav=1 AND cas_bg='0000-00-00' AND cas_ok='0000-00-00'"} }
+    item {title:'... po termínu'          ,par:{cond:"stav=1 AND cas_do<=NOW() AND cas_ok='0000-00-00'"} }
+    item {title:'... plněných'            ,par:{cond:"stav=1 AND cas_bg!='0000-00-00' AND cas_ok='0000-00-00'"} }
+    item {title:'... splněných'           ,par:{cond:"stav=1 AND cas_ok!='0000-00-00'"} }
+    item {title:'... odložených'          ,par:{cond:"stav=2"} }
+    item {title:'... zrušených'           ,par:{cond:"stav=3"} }
+  }
+  func onclick(i:ezer) { var cond: text
+    u.header(i);
+    ukoly.display(1,'u|b');
+    cond= replace(i.par.cond,"#I",sys('user','id_user'));
+    ukoly._ukoly_load(cond)
+  }
+}
+
+use u: form right [12,4,,]
+use ukoly: form _ukoly [12,35,,]
+
+# ------------------------------------------------------------------------------------------- _ukoly
+form _ukoly [,,400,50] {
+  const T_butt = 360
+  const T_lege = 2
+  const L_ukol = 450; T_ukol = 20
+  func onchanged () { if (form.key()) _form_state('bc','be|br') }
+  # --------------------------- seznam úkolů
+  view u: table ukol
+  view x: table _user { join_type:'LEFT', join:"ON x.id_user=u.kdo_od" }
+  view y: table _user { join_type:'LEFT', join:"ON y.id_user=u.kdo_pro" }
+  view c: table clen  { join_type:'LEFT', join:"USING(id_clen)" }
+  browse ukoly [0,T_ukol+0,180,160] { tag:'u', rows:19, qry_rows:1
+    css_rows:'barva,1:yellow,3:green,4:blue,5:grey'
+    show id_ukol { data:u.id_ukol }
+    show je_diskuse { data:u.je_diskuse }
+    show barva { expr:"CASE
+         WHEN stav=1 AND cas_bg!='0000-00-00' AND cas_ok='0000-00-00' THEN 1
+         WHEN stav=1 AND cas_ok!='0000-00-00' THEN 3
+         WHEN stav=2 THEN 4
+         WHEN stav=3 THEN 5
+         ELSE 0 END" }
+    show barva2 { expr:"IF(stav=1 AND cas_do<LEFT(NOW(),10) AND cas_ok='0000-00-00',1,0)" }
+    show [,,50,] { title:'zadal', data:x.surname, format:'sq*t' }
+    show [,,50,] { title:'provádí', data:y.surname, format:'sq*t' }
+    show [,,100,] { title:'kontakt', expr:"CONCAT(c.jmeno,' ',c.prijmeni)", format:'sq*t' }
+    show [,,153,] { title:'popis', data:u.popis, format:'sq*t', css_cell:'je_diskuse,1:diskuse'  }
+    show [,,60,] { title:'termín', data:u.cas_do, format:'rs-q*', css_cell:'barva2,1:termin' }
+    func onrowclick() { form.load(id_ukol); diskuse.display(je_diskuse) }
+  }
+  # --------------------------- položky
+  field u_od { data:u.kdo_od }
+  # --------------------------- zobrazené položky
+  field id_clen [L_ukol+58,T_ukol+7,41,] { tag:'u', data:u.id_clen, format:'rdt' }
+  field nm_clen [L_ukol+107,T_ukol+7,195,] { tag:'u', expr:"CONCAT(c.jmeno,' ',c.prijmeni)", format:'dt' }
+  select u_pro [L_ukol+58,T_ukol+32,100,] { tag:'u', type:'map0', options:user.surname, data:u.kdo_pro
+    help:'výběr realizátora' }
+  field zadal  [L_ukol+201,T_ukol+32,100,] { tag:'u', data:x.surname, format:'d' }
+  edit u_popis [L_ukol+58,T_ukol+57,243,112] { tag:'u', data:u.popis }
+  field cas_od [L_ukol+58,T_ukol+177,85,] { tag:'u', type:'date', data:u.cas_od, format:'r'  }
+  field cas_bg [L_ukol+216,T_ukol+177,85,] { tag:'u', type:'date', data:u.cas_bg, format:'Rr'  }
+  field cas_do [L_ukol+58,T_ukol+202,85,] { tag:'u', type:'date', data:u.cas_do, format:'r'  }
+  field        [L_ukol+216,T_ukol+202,85,] { tag:'u', type:'date', data:u.cas_ok, format:'Rr'  }
+  select stav  [L_ukol+84,T_butt+9,76,] { tag:'bo', type:'map', options:cis_u_stavy.zkratka, data:u.stav}
+  # --------------------------- případná diskuse
+  check je_diskuse [L_ukol,T_ukol+230,80,] { tag:'u', title:'diskuse', data:u.je_diskuse, value:'0'
+    func onchange() { diskuse.display(this) }
+  }
+  chat diskuse [L_ukol+58,T_ukol+230,243,100] { tag:'u', format:'n', divide:70, data:u.diskuse }
+  # --------------------------- popisky
+  label [L_ukol,T_ukol,309,377] { css:'ae_work' }
+  label [L_ukol+5,T_ukol+10,,] { title:'kontakt' }
+  label [L_ukol+5,T_ukol+35,,] { title:'provádí' }
+  label [L_ukol+165,T_ukol+35,,] { title:'zadal' }
+#   label [L_ukol+173,T_ukol+60,,] { title:'dne'  }
+  label [L_ukol+5,T_ukol+60,,] { title:'popis' }
+  label [L_ukol+5,T_ukol+180,,] { title:'zadáno' }
+  label [L_ukol+154,T_ukol+180,,] { title:'zahájeno' }
+  label [L_ukol+5,T_ukol+205,,] { title:'termín'  }
+  label [L_ukol+154,T_ukol+205,,] { title:'dokončeno'  }
+  # --------------------------- legenda
+  label [0,T_lege+0,63,] {title:'zahájeno', format:'c', help:'práce je započata', css:'zluty'}
+  label [71,T_lege+0,53,] {title:'diskuse', format:'c', help:'něco je třeba upřesnit', css:'diskuse'}
+  label [132,T_lege+0,60,] {title:'dokončeno', format:'c', help:'hotovo', css:'zeleny'}
+  label [341,T_lege+0,52,] {title:'odloženo', format:'c', help:'požadavek je odložen', css:'pre_7'}
+  label [400,T_lege+0,45,] {title:'zrušeno', format:'c', help:'požadavek je zrušen', css:'nasedly'}
+  # --------------------------- tlačítka a změna stavu
+  func _form_state(on,off) {
+    form.enable(1,on); form.enable(0,off);
+  }
+  # Uložit změněný úkol
+  button uloz_ukol [L_ukol+176,T_butt+8,,] { tag:'bc', type:'submit', title:'Uložit změny'
+    help:'provede uložení změněných (červeně orámovaných) položek'
+    func onclick() { 
+      echo("před=",form.key()); 
+      the_formsave(form,ukoly); 
+      echo("po=",form.key()); 
+      _form_state('be','bc|br') }
+  }
+  # Zpět
+  button zpet_ukol [L_ukol+267,T_butt+8,,] { tag:'bc', title:'Zpět'
+    help:'zruší červené orámování a vrátí původní obsah'
+    func onclick () {
+      if (ukoly.browse_count()) {
+        form.load(ukoly.browse_key()); _form_state('be','bc|br');
+      }
+      else {
+        form.init(); _form_state('be','bc|br')
+      }
+    }
+  }
+  # Nový úkol
+  button vytvor_ukol [L_ukol+8,T_butt+8,,] { tag:'be', title:'Nový úkol'
+    help:'naplní položky základními hodnotami, vlastní vytvoření se provede uložením změn'
+    func onclick () {
+      if (confirm("Nový úkol se bude týkat kontaktu č.",hb.klu.cle.curr_clen(1),chr(10),
+        hb.klu.cle.curr_clen(2),chr(10),"nastaveného na kartě Kontakty")) {
+        ukol_novy(hb.klu.cle.curr_clen(1),hb.klu.cle.curr_clen(2));
+        _form_state('bc','be|br')
+      }
+    }
+  }
+  func ukol_novy (id,name) {
+    form.init(1); u_popis.change();
+    id_clen= id; nm_clen= name; id_clen.change();
+    cas_do= now(); cas_do.change();
+    cas_od= now(); cas_od.change();
+    u_pro.key(sys('user','id_user')); u_pro.change(); // sobě
+    u_od= sys('user','id_user'); u_od.change(); zadal= sys('user','surname'); // zadavatel
+    stav.key(1); stav.change();
+  }
+  func _ukoly_load (cond) {
+    if (ukoly.browse_load(cond))
+      form.load(ukoly.browse_key())
+    else
+      form.init()
+  }
+  # ------------------------==> . kontextové_menu
+  menu { type:'context'
+    item back { title:'ukázat všechny změny'
+      func onclick () { track.back_show('ukol',form.key()) } }
+  }
+}

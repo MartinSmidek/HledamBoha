@@ -1,0 +1,481 @@
+# ------------------------------------------------------------------------------------------------ #
+# Karta pro vkládání plateb z bankovních výpisů                                                    #
+#                                                                                                  #
+# Aplikace HledámBoha    (c) 2022 Martin Šmídek <martin@smidek.eu> #
+# ------------------------------------------------------------------------------------------------ #
+
+# ----------------------------------------==> inicializace
+func onfirstfocus () {
+  r.filter_init();
+  p_reload();
+//  panel.owner.call('kontakte_init'); // kvůli ukaz_ctenare
+  onfocus();
+}
+func onfocus() { 
+  f.drop.start();
+}
+
+var ok: number
+
+use v:  form _p_vypisy  [6,3,,]
+use p:  form _p_prevody [321,3,,]
+use i:  form _p_info    [405,331,,]
+use r:  form _p_rok     [6,507,,]
+use c:  form _p_clen    [405,390,,]
+//use d:  form _p_dar     [880,390,,]
+use f:  form _drop      [6,331,,]
+use k:  form _cmd       [180,520,,]
+# ----------------------------------------==> globální proc
+
+# ----------------------------------------==> lokální proc
+#==> . p_reload
+func p_reload () {
+  r.filter_refresh();
+//  v.tit= "<h1>Výpisy</h1>";
+  p._prevody.browse_init(); c.init(); i.init();
+//  d.init(); 
+  v._vypisy.browse_load(r.p_filter);
+}
+#==> . zmena_typu
+func zmena_typu(novy_typ,idc) { var y:object // idc může být *
+  y= php.ch_ban_zmena(p._prevody.browse_key(),novy_typ,idc);
+  if (y.err) alert(y.err)
+  else {
+    p._prevody.browse_row();
+    v._vypisy.browse_row();
+  }
+}
+func Refresh() {
+  p._prevody.browse_row();
+  v._vypisy.browse_row();
+  if (p._prevody.idc) c.load_clen(p._prevody.idc); else c.init();
+}
+# --------------------------------------------------==> VÝPISY
+form _p_vypisy [,,1070,309] { css:'work'
+  label tit [22,5,100,] { title:'<h1>Výpisy</h1>' }
+  func Seek(idv) {
+    p_reload();
+    if (!_vypisy.browse_seek(`vv.id_vypis=${idv}`)) {
+      r.filter_init();
+      p_reload();
+      _vypisy.browse_seek(`id_vypis=${idv}`);
+    }
+  }
+  browse _vypisy [9,29,250,100] {buf_rows:100, rows:13, qry_rows:1,
+      group_by:'vv.id_vypis', // optimize:{qry:'noseek'}
+      css_rows:'mintyp,5:pre_5,7:pre_7,8:pre_8,9:pre_9'
+    view vv: table vypis
+    view vp: table dar {join_type:'LEFT' join:'USING (id_vypis)' }
+    view vu: table _cis {join_type:'LEFT' join:"ON druh='b_ucty' AND data=vv.nas_ucet" }
+    // sloupce
+    show id_vypis [,,0,] { title:'ID výpisu', data:vv.id_vypis, format:'rsq=' }
+    show {data:vp.id_dar}
+    show [,,20,] { title:'účet', data:vu.zkratka, format:'csq=' 
+        help:'zkratka našeho účtu'}
+    show rok_vypis [,,40,] { title:'rok', data:vv.rok_vypis, format:'rsq=' }
+    show n_vypis [,,40,] { title:'č.', data:vv.n_vypis, format:'rsq=' }
+    show mintyp { title:'t', format:'s-q' 
+        expr:"IFNULL(MIN(IF(vp.typ IN (1,2,3,4,6),10,IF(vp.typ=8 AND vp.id_clen!=0,9,vp.typ))),0)"}
+    show maxtyp { title:'t', format:'s-q' 
+        expr:"IFNULL(MAX(IF(vp.typ IN (1,2,3,4,6),0,IF(vp.typ=8 AND vp.id_clen!=0,9,vp.typ))),0)"}
+    show datum_od [,,65,] { title:'od', data:vv.datum_od, format:'rs-q=' }
+    show datum_do [,,65,] { title:'do', data:vv.datum_do, format:'rsq=' }
+    show stav_od [,,0,] { title:'poč.stav', data:vv.stav_od, format:'rsq=' }
+    show stav_do [,,0,] { title:'konc.stav', data:vv.stav_do, format:'rsq=' }
+    show soubor [,,35,] { title:'soubor', data:vv.soubor, format:'ts' 
+        css_cell:'maxtyp,5:pre_5,7:pre_7,8:pre_8,9:pre_9'
+        help:'název importovaného souboru'}
+    func onrowclick () {
+      p._prevody.browse_load(`id_vypis=${v._vypisy.id_vypis}`);
+      k.p_rychle_off();
+    }
+    func onclick() {
+      if (datum_od.width()) { 
+        datum_od.width(0); datum_do.width(0); stav_od.width(65); stav_do.width(65); 
+      }
+      else { 
+        datum_od.width(65); datum_do.width(65); stav_od.width(0); stav_do.width(0); 
+      }
+    }
+  }
+}
+# --------------------------------------------------==> PLATBY
+form _p_prevody [,,774,262] {
+  view d: table dar
+  label [12,5,73,] { title:'<h1>Platby</h1>' }
+  label [77,9,700,] { title:"
+    <span class='pre_10'>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span> není dar ... 
+    <span class='pre_5'>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span> zbývá vyřešit ...
+    <span class='pre_7'>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span> navrženo spojení ... 
+    (<span class='pre_8'>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span> nespojená a  
+     <span class='pre_8'>&nbsp;&nbsp;</span><span class='pre_9'>&nbsp;&nbsp;</span> spojená složenka) ... 
+    <span class='pre_9'>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span> OK spojeno s dárcem"
+  }
+  browse _prevody [0,29,300,100] {buf_rows:500, rows:13, qry_rows:1,
+      css_rows:'typ,5:pre_5,6:pre_6,7:pre_7,8:pre_8,9:pre_9'
+    show id_dar [,,55,] { title:'ID platby', data:d.id_dar, format:'rs+' }
+    show popis [,,151,] { title:'popis účtu', data:d.ucet_popis, format:'tq*' }
+    show zprava [,,110,] { title:'zpráva', data:d.zprava, format:'tq*' }
+    show idc [,,50,] { title:'ID osoby', data:d.id_clen, format:'rq=' 
+        css_cell:'typ_slozenka,5:pre_5,6:pre_6,7:pre_7,8:pre_8,9:pre_9' }
+    show castka [,,70,] { title:'částka', data:d.castka, format:'rq=' 
+        css_cell:'typ_slozenka,5:pre_5,6:pre_6,7:pre_7,8:pre_8,9:pre_9' }
+    show vsym [,,75,] { title:'vs', data:d.vsym, format:'rq*' }
+//    show ssym [,,75,] { title:'ss', data:d.ssym, format:'rq*' }
+    show ucet [,,126,] { title:'účet', data:d.ucet, format:'trq*' }
+    show datum [,,75,] { title:'datum', data:d.castka_kdy, format:'rq=' }
+    show typ [,,0,] { data:d.typ, format:'rq=' }
+    show typ_slozenka { expr:"IF(d.typ=8 AND d.id_clen!=0,9,d.typ)" }
+    func onrowclick () {
+      i.load(id_dar);
+//      d.load(id_dar);
+      if (idc) c.load_clen(idc); else c.init();
+    }
+    func onclick() {
+      if (typ.width()) { typ.width(0); popis.width(151) }
+      else { typ.width(10); popis.width(140) }
+    }
+    # -------------------------------------==> . kontextové menu
+    menu { type:'context'
+      item { title:'ukázat dárce'
+        func onclick () {  if (idc) cle.show_clen(idc); }}
+      item { title:'ukázat změny platebních údajů'
+        func onclick () { track.back_show('dar',_prevody.browse_key()) }}
+      item { title:'-anonymní dar'
+        func onclick () {  c.load_clen(1); zmena_typu(typ==8?8:9,1); }}
+      item { title:'vložit jako nového dárce'
+        func onclick () { pop_novy.Vytvor(id_dar,vsym); }}
+      item { title:'vložit jako firemního dárce'
+        func onclick () { pop_novy.Vytvor_fy(id_dar,vsym); }}
+    }
+  }
+  # --------------------------------------------------==> NOVÝ
+  panel pop_novy [,,300,80] { title:'Vytvoření nového dárce', type:'popup', css:'dialog'
+    var je_firma=0 // 1=firma
+    func Vytvor(_idd,_vs) { var y:object
+      clear(); f.display(2,'o'); je_firma= 0;
+      f.titul= ''; f.jmeno= ''; f.prijmeni= ''; f.idd= _idd;
+      y= php.ch_bank_novy_darce(_idd);
+      if (y.err) return(alert(y.err));
+      f.titul= y.titul;
+      f.jmeno= y.jmeno;
+      f.prijmeni= y.prijmeni;
+      panel.popup();
+    }
+    func Vytvor_fy(_idd,_vs) { var y:object
+      clear(); f.display(2,'f'); je_firma= 1;
+      f.nazev= ''; f.idd= _idd;
+      y= php.ch_bank_novy_darce(_idd,je_firma);
+      if (y.err) return(alert(y.err));
+      f.nazev= y.nazev;
+      panel.popup();
+    }
+    use f: form { css:'work'
+      var idd:number
+      field nazev [61,10,152,] { tag:'f', title:'firma' }
+      field titul [61,7,100,] { tag:'o', title:'titul' }
+      field jmeno [61,32,100,] { tag:'o', title:'jméno' }
+      field prijmeni [61,57,100,] { tag:'o', title:'příjmení' }
+      // zapiš nebo odejdi
+      button [234,10,,] {title:'[fa-save] Ulož'
+        func onclick () { 
+          if (panel.je_firma)
+            php.ch_bank_uloz_darce_fy(idd,nazev);
+          else
+            php.ch_bank_uloz_darce(idd,titul,jmeno,prijmeni);
+          Refresh();
+          panel.hide(1); 
+      }}
+      button [234,40,,] {title:'[fa-undo] Zpět'
+        func onclick () { panel.hide(0); }
+      }
+    }
+  }
+}
+# --------------------------------------------------==> DROP
+form _drop [,,392,161] { css:'work'
+  #==> . vložení výpisů
+  var  dfold='/banka'      // podsložka bez koncového / se nastavuje dynamicky
+  label [10,7,371,] {title:'místo pro vložení bankovního výpisu typu CSV'}
+  label drop [10,54,370,98] { type:'drop'
+    func start() {
+      drop.init('/banka','U:'); 
+    }
+    func ondrop(f:object) {  // možnost odmítnutí přenosu navrácením 0
+      if (match('csv$',f.name,'i')) return(1);
+      alert(`'${f.name}' není soubor typu CSV`); return(0)
+    }
+    func onload(f:object) { var y:object // po dokončení přenosu, jméno bude ASCII
+      echo(`load: ${f.name}`);
+      y= php.aby_ban_load(f.name);
+      if (y.war) warning(y.war);
+      if (y.err) alert(y.err);
+      else {
+        v.Seek(y.idv);
+      }
+    }
+    func onerror(e:object) { 
+      warning(e.msg); return(1) 
+    }
+  }
+}
+# --------------------------------------------------==> PLATBA
+form _p_info [,,672,52] { css:'work'
+  view d: table dar
+  field [26,8,96,18] { title:'VS:', data:d.vsym, format:'o' }
+  field [156,8,312,18] { title:'popis:', data:d.ucet_popis, format:'o' }
+  field [155,28,475,18] { title:'zpráva:', data:d.zprava, format:'o' }
+  field [589,8,70,18] { title:'částka:', data:d.castka, format:'or' }
+}
+# --------------------------------------------------==> PLÁTCE (osoba | firma)
+form _p_clen [,,464,123] { css:'work'
+  view c: table clen
+  label [9,10,50,15] { title:'<h1>Plátce</h1>' }
+  field osoba { data:c.osoba }
+  field [69,17,50,18] { title:'^ID', data:c.id_clen, format:'dr' }
+  // osoba
+  field [150,17,63,17] { tag:'o', title:'^titul', data:c.titul, format:'dF' }
+  field [223,17,130,17] { tag:'o', title:'^příjmení', data:c.prijmeni, format:'dF' }
+  field [363,17,91,17] { tag:'o', title:'^jméno', data:c.jmeno, format:'dF' }
+  // firma
+  field [150,17,203,17] { tag:'f', title:'^firma', data:c.firma, format:'d' }
+  field [150,56,203,17] { tag:'f', title:'^firma info', data:c.firma_info, format:'d' }
+  // adresa
+  field [150,92,132,17] { title:'^ulice', data:c.ulice, format:'d' }
+  field [288,92,40,17] { title:'^psč', data:c.psc, format:'dr' } //, sql_pipe:'psc' }
+  field [334,92,122,17] { title:'^obec', data:c.obec, format:'dF' }
+  # ==> . spojit
+  button spojit [26,60,,] {
+    title:"<span class='pre_9'>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span> Ano, spojit", format:''
+    func onclick () {
+      if (form.key()) { zmena_typu(p._prevody.typ==8?8:9,form.key()); load_clen(form.key()) }
+  }}
+  # ==> . rozpojit
+  button zmenit [27,88,,] {
+    title:"<span class='pre_5'>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span> rozpojit"
+    func onclick () {
+      zmena_typu(p._prevody.typ==8?8:5,0); c.init()
+  }}
+  func load_clen (idc) {
+    form.load(idc);
+    form.display(2,osoba==1 ? 'o' : 'f');
+  }
+}
+//# --------------------------------------------------==> ROZDĚLENÍ
+//form _p_dar [,,197,123] { css:'work'
+//  view vp: table dar
+//  label [8,12,100,15] { title:'<h1>úhrada / dar</h1>' }
+//  field idp { data:vp.id_dar }
+//  field castka [122,19,57,17] { title:'^částka', data:vp.castka, format:'dr' }
+//}
+# --------------------------------------------------==> VÝBĚR
+form _p_rok [,,155,74] { css:'parm'
+  var p_filter=1
+  radio p_co [1,1,153,71] { format:'t'
+    case [0,0,143,14] { title:'všechny výpisy', expr:'1' }
+    case [0,17,143,14] { title:'pouze letošní', expr:'2' }
+    case [0,34,143,14] { title:'pouze loňské', expr:'3' }
+    func onchange () { p_reload() }
+  }
+  check p_zbyva [3,53,143,14] { title:'nehotové (nezelené))', help:'jen nezelené', format:'t'
+    func onchange () { p_reload() }
+  }
+  func filter_init() {
+    p_co= 1; p_zbyva= 0; filter_refresh()
+  }
+  func filter_refresh() {
+    // interval
+    p_filter= p_co==1 ? '1' : (
+              p_co==2 ? "YEAR(vv.datum_od)=YEAR(NOW())" : (
+              p_co==3 ? "YEAR(vv.datum_od)=YEAR(NOW())-1" : '0'));
+    // nehotové?
+    v._vypisy.set_attrib('group_by',p_zbyva ? 'vv.id_vypis HAVING mintyp<9' : 'vv.id_vypis');
+  }
+}
+# --------------------------------------------------==> PŘÍKAZY
+form _cmd [,,897,89] { css:'work'
+# ----------------------------------------==> . rychle
+  label ram [394,16,321,31] { css:'pasivni' }
+  var rychle: number
+  var done:number
+  button rychle_start [406,23,,] { help:'projdi daný výpis a připisuj platby', title:"[fa-play] Rychle"
+    func onclick () {
+      done= 1;
+      rychle= 1;
+      ram.set_css('aktivni','pasivni');
+      rychle_start.enable(0); rychle_ano.enable(1);
+      rychle_ne.enable(1); rychle_konec.enable(1);
+      p._prevody.browse_next(1); // nastav 1. řádek
+      if (eq(p._prevody.typ,5,7)) 
+        p._prevody.onrowclick();
+//        p._prevody.raise('onrowclick',p._prevody.id_dar)
+      else
+        p_rychle_next()
+  }}
+  button rychle_ano [477,23,,] { title:'[fa-plus] Ano, další', format:'d',
+    help:'zapiš platbu odsouhlasenému kontaktu a běž dál'
+    func onclick () { var idd:number
+      if (c.key()) zmena_typu(9,c.key());
+      p_rychle_next()
+  }}
+  button rychle_ne [563,23,,] { title:'[fa-minus] Ne, další', format:'d', help:'běž dál'
+    func onclick () {
+      p_rychle_next()
+  }}
+  button rychle_konec [643,23,,] { title:'[fa-stop] Konec', format:'d', help:'ukonči procházení'
+    func onclick () {
+//      p_rychle_off
+  }}
+  func p_rychle_next () {
+    p._prevody.browse_next(); p_rychle_skip(); 
+    if (eq(p._prevody.typ.get,5,7))
+      p._prevody.raise('onrowclick',p._prevody.id_dar)
+    else
+      p_rychle_off()
+  }
+  func p_rychle_skip () {
+    while (!eq(p._prevody.typ.get,5,7) || !p._prevody.idc) {
+      if (!p._prevody.browse_next()) break; 
+    }
+  }
+  func p_rychle_off () {
+    rychle= 0; ram.set_css('pasivni','aktivni');
+    rychle_start.enable(1); rychle_ano.enable(0);
+    rychle_ne.enable(0); rychle_konec.enable(0);
+    v._vypisy.browse_focus()
+  }
+  # ----------------------------------------==> . hledat ap.
+  button ucty [12,9,,] { title:'[fa-search] Hledat v účtech'
+    func onclick () { var idc: number
+      idc= pop_ucty.Vyber(p._prevody.ucet); 
+      if (idc) c.load_clen(idc);
+  }}
+  button cleni [12,35,,] { title:'[fa-search] Hledat podle jména'
+    func onclick () { var idc: number
+      idc= pop_popis.Vyber(p._prevody.popis); 
+      if (idc) c.load_clen(idc);
+  }}
+  button cleni_fy [12,61,,] { title:'[fa-search] Hledat ve firmách'
+    func onclick () { var idc: number
+      idc= pop_popis.Vyber_fy(p._prevody.popis); 
+      if (idc) c.load_clen(idc);
+  }}
+  # ==> . < kontakty
+  button kontakt_set [152,9,,] { title:'kontakt [fa-arrow-left] plátce'
+    help:'nastaví kartu Kontakty podle účtu plátce'
+    func onclick() {
+      cle.show_clen(p._prevody.idc)
+  }}
+  # ==> . > kontakty
+  button kontakt_get [152,35,,] { title:'kontakt [fa-arrow-right] plátce'
+    help:'vymění plátce za osobu nastavenou v Kontakty'
+    func onclick () { var idc:number
+      idc= cle.curr_clen(1);
+      if (idc) c.load_clen(idc);
+  }}
+  # ==> . > kontroly výpisů
+  button [265,9,,] { title:'[fa-info-circle] kontrola výpisů'
+    help:'kontroly řad výpisů'
+    func onclick () { 
+      pop_kontrola.Ukaz();
+  }}
+  # ==> . nedar
+  button nedar [751,8,,] { format:'',
+    title:"<span class='pre_10'>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span> platba není darem",
+    func onclick () { 
+      zmena_typu(6,0); c.init()
+    }
+  }
+  # ==> . platba
+  button jedar [751,35,,] { format:'',
+    title:"<span class='pre_5'>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</span> platba je darem"
+    func onclick () { 
+      zmena_typu(5,0); c.init()
+    }
+  }
+}
+# ========================================================================================> KONTROLA
+panel pop_kontrola [,,780,400] { title:'Kontrola souvislosti výpisů', type:'popup', css:'dialog'
+  func Ukaz() {
+    pk.Ukaz_data();
+    panel.modal(186,100);
+  }
+  use pk: form {
+    func Ukaz_data() {
+      info= php.ch_bank_kontrola(ucet.key(),rok);
+    }
+    select ucet [40,0,250,] { type:'map', title:'účet', options:cis_b_ucty.hodnota, format:'t'
+      func onchanged() { Ukaz_data(); }
+    }
+    field rok [350,0,40,] {title:'rok', value:'2021', format:'rt'
+      func onchanged() { Ukaz_data(); }
+    }
+    label info [10,30,760,350] { style:'background:white' }
+  }
+}
+# =========================================================================================> HLEDÁNÍ
+# ------------------------------------------------------------------------------------==> podle účtu
+panel pop_ucty [,,780,215] { title:'Převody ze stejného účtu', type:'popup', css:'dialog'
+  var idc: text
+  func Vyber(ucet) {
+    pu.seznam.browse_load(`d.zpusob=2 AND d.ucet='${ucet}' AND d.deleted='' AND d.typ=9`);
+    return panel.modal(186,100) ? idc : 0;
+  }
+  use pu: form {
+    view d: table dar
+    view c: table clen {join_type:'LEFT' join:'USING (id_clen)' }
+    browse seznam [7,7,820,200] { rows:10, qry_rows:0, 
+      show [,,120,] { title:'účet', data:d.ucet, format:'r' }
+      show [,,150,] { title:'popis', data:d.ucet_popis }
+      show id_clen [,,70,] { title:'ID dárce', data:d.id_clen, format:'r' }
+      show [,,100,] { title:'příjmení', data:c.prijmeni, format:'t' }
+      show [,,90,] { title:'jméno', data:c.jmeno, format:'t' }
+      show [,,60,] { title:'částka', data:d.castka, format:'r' }
+      show [,,70,] { title:'datum', data:d.castka_kdy, format:'r'  }
+      func onsubmit () { idc= id_clen; panel.hide(1); }
+      func onrowclick () { idc= id_clen; }
+    }
+    button [716,10,,] { type:'submit', title:'[fa-download] vyber', help:'nalezený starší převod dárce'
+      func onclick () { panel.hide(1); }
+    }
+    button cancel [716,40,,] { title:'[fa-undo] zpět', help:'vrátit se zpět'
+      func onclick () { panel.hide(0); }
+    }
+  }
+}
+# -----------------------------------------------------------------------------------==> podle jména
+panel pop_popis [,,780,215] { title:'Kontakty Klubu', type:'popup', css:'dialog'
+  var idc: text
+  func Vyber(popis) {
+    pu.seznam.browse_load(`${php.ch_search_popis(popis)} AND IFNULL(d.deleted='',1) `,
+        'd.castka_kdy DESC');
+    return panel.modal(186,100) ? idc : 0;
+  }
+  func Vyber_fy(popis) {
+    pu.seznam.browse_load(`${php.ch_search_popis_fy(popis)} AND IFNULL(d.deleted='',1) `,
+        'd.castka_kdy DESC');
+    return panel.modal(186,100) ? idc : 0;
+  }
+  use pu: form {
+    view c: table clen
+    view d: table dar {join_type:'LEFT' join:'USING (id_clen)' }
+    browse seznam [7,7,820,200] { rows:10, qry_rows:0, 
+      show id_clen [,,70,] { title:'ID osoby', data:c.id_clen, format:'r' }
+      show [,,90,] { title:'příjmení', data:c.prijmeni, format:'t' }
+      show [,,80,] { title:'jméno', data:c.jmeno, format:'t' }
+      show [,,90,] { title:'firma', data:c.firma, format:'t' }
+      show [,,100,] { title:'účet', data:d.ucet, format:'r' }
+      show [,,100,] { title:'popis', data:d.ucet_popis }
+      show [,,60,] { title:'částka', data:d.castka, format:'r' }
+      show [,,70,] { title:'datum', data:d.castka_kdy, format:'r'  }
+      func onsubmit () { idc= id_clen; panel.hide(1); }
+      func onrowclick () { idc= id_clen; }
+    }
+    button [716,10,,] { type:'submit', title:'[fa-download] vyber', help:'nalezený starší převod dárce'
+      func onclick () { panel.hide(1); }
+    }
+    button cancel [716,40,,] { title:'[fa-undo] zpět', help:'vrátit se zpět'
+      func onclick () { panel.hide(0); }
+    }
+  }
+}

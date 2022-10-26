@@ -1,0 +1,147 @@
+# ------------------------------------------------------------------------------------------------ #
+# Karta pro vkládání projektů z Donio.cz                                                           #
+#                                                                                                  #
+# Aplikace HledámBoha    (c) 2022 Martin Šmídek <martin@smidek.eu> #
+# ------------------------------------------------------------------------------------------------ #
+
+# ----------------------------------------==> inicializace
+func onfirstfocus () {
+  proj.Init();
+  onfocus();
+}
+func onfocus() { 
+  drop.drop.start();
+}
+
+use proj:  form _proj [6,3,,]
+use dary:  form _dary [404,3,,]
+use drop:  form _drop [6,331,,]
+# ----------------------------------------==> globální proc
+# ----------------------------------------==> lokální proc
+# --------------------------------------------------==> PROJEKTY
+form _proj [,,1070,309] { css:'work'
+  label tit [22,5,218,] { title:'<h1>Projekt přes donio.cz ... </h1>' }
+  func Init() {
+    _projekty.browse_load(`typ=1`);
+  }
+  func Seek(idp) {
+    if (!_projekty.browse_seek(`p.id_projekt=${idp}`)) {
+      _projekty.browse_seek(`id_projekt=${idp}`);
+    }
+  }
+  browse _projekty [9,29,250,100] {buf_rows:100, rows:13, qry_rows:1,
+    view p: table projekt
+    // sloupce
+    show idp { data:p.id_projekt }
+    show nazev [,,120,] { title:'název', data:p.nazev, format:'ts' }
+    show suma [,,60,] { title:'vybráno', data:p.suma, format:'rs' }
+    show soubor [,,170,] { title:'soubor', data:p.soubor, format:'ts' }
+    func onrowclick () {
+      dary._dary.browse_load(`id_projekt=${idp}`);
+    }
+    # ---------------------------------------==> . kontextové menu
+    menu { type:'context'
+      item { title:'změnit název'
+        func onclick () { var jinak:text
+          jinak= prompt2('Přejmenujte projekt',nazev);
+          if (jinak) {
+            php.query(`UPDATE projekt SET nazev='${jinak}' WHERE id_projekt=${idp}`);
+            _projekty.browse_row();
+            map_projekt.map_load();
+            hb.dirty('klu.cle');
+          }
+      } }
+    }
+  }
+}
+# --------------------------------------------------==> DARY
+form _dary [,,774,262] {
+  label [12,5,150,] { title:'<h1>... a jeho dary</h1>' }
+  label [162,9,253,] { title:'dvojklik přejde na kontakt' }
+  view d: table dar
+  view c: table clen {join_type:'LEFT' join:'USING (id_clen)' }
+  browse _dary [0,29,300,100] {buf_rows:500, rows:24, qry_rows:1
+    show idc { data:d.id_clen }
+    show datum [,,75,] { title:'datum', data:d.castka_kdy, format:'srq=' }
+    show castka [,,70,] { title:'částka', data:d.castka, format:'srq=' }
+    show jmeno [,,80,] { title:'dárce', data:c.jmeno, format:'stq*' }
+    show jm2 [,,40,] { title:'...', data:d.ucet_popis, format:'stq*' }
+    show email [,,170,] { title:'email', data:c.email, format:'stq*' }
+    show pozn [,,180,] { title:'vzkaz', data:d.pozn, format:'stq*' }
+    func onsubmit() {
+      cle.show_clen(idc)
+    }
+    }
+  }
+# --------------------------------------------------==> DROP
+form _drop [,,392,161] { css:'work'
+  #==> . vložení projektu
+  var dfold='/banka/donio',   // podsložka bez koncového / se nastavuje dynamicky
+      idp=0,                  // ID projektu zvoleného v ondrop nebo 0 pro nový projekt
+      novy=''                 // jméno nového projektu
+  label [10,7,371,] {title:'místo pro vložení souhrnu projektu - přesvědčte se prosím, že název 
+    souboru má tvar "projekt.csv" a byl získán z "projekt.xlsx"
+    příkazem Excelu <b>Uložit jako</b> s variantou "CSV UTF-8 (s oddělovači)"'
+  }
+  label drop [10,54,370,98] { type:'drop'
+    func start() {
+      drop.init('/banka/donio','U:'); 
+    }
+    func ondrop(f:object) {  // možnost odmítnutí přenosu navrácením 0
+      if (match('csv$',f.name,'i')) {
+        if (DonProjekt.Vyber()) {
+          idp= DonProjekt.je.stary ? DonProjekt.je.vybrany.key() : 0;
+          novy= DonProjekt.je.novy ? DonProjekt.je.nazev : '';
+          return 1;
+        }
+        alert(`soubor nebude načten`); return 0;
+      }
+      alert(`'${f.name}' není soubor typu CSV`); return 0;
+    }
+    func onload(f:object) { var y:object // po dokončení přenosu, jméno bude ASCII
+      echo(`load: ${f.name}`);
+      y= php.aby_donio_load(f.name,idp,novy); // => {idp,war,err}
+      if (y.war) warning(y.war);
+      if (y.err) {
+        alert(y.err);
+        echo("výmaz souboru");
+      }
+      else {
+        proj.Seek(y.idp);
+        map_projekt.map_load();
+        map_projekt_donio.map_load();
+        hb.dirty('klu.cle');
+      }
+    }
+    func onerror(e:object) { 
+      warning(e.msg); return 1; 
+    }
+  }
+}
+panel DonProjekt [0,0,410,100] { type:'popup', title:"Volba projektu", 
+      par:{close:'no'} 
+  const don_='DON_...'
+  func Vyber() {
+    je.nazev= don_;
+    je.novy= 1; je.stary= 0;
+    return panel.modal();
+  }
+  use je: form _f 
+  form _f {
+    check novy [1,7,24,] { format:'t', value:'1', func onchange() { stary= !novy }}
+    field nazev [99,8,300,] {title:'nový projekt', format:'t'
+      func onfocus() { stary= 0; novy= 1; }}
+    check stary [1,37,24,] { format:'t', value:'0', func onchange() { novy= !stary }}
+    select vybrany [99,38,304,] {type:'map', title:'běžící projekt', format:'t', 
+        options:map_projekt_donio.nazev
+      func onfocus() { stary= 1; novy= 0; }}
+    button [97,68,,] {title:'[fa-save] Načti soubor' 
+      func onclick() { 
+        if (novy && (!trim(nazev) || nazev==don_)) 
+          alert('jméno nového projektu je povinné')
+        else
+          panel.hide(1) 
+    }}
+    button [210,68,,] {title:'[fa-undo] Zpět' func onclick() { panel.hide(0) }}
+  }
+}

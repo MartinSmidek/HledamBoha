@@ -1,5 +1,5 @@
 <?php
-# Aplikace Aby pro Nadační fond sester františkánek
+# Aplikace HB pro HledámBoha.cz
 # (c) 2022 Martin Smidek <martin@smidek.eu>
   
   // verze použitého jádra Ezeru
@@ -8,14 +8,14 @@
   $_GET['touch']= 0; // nezavede jquery.touchSwipe.min.js => filtry v browse jdou upravit myší
 
   // servery a jejich cesty
-  $deep_root= "../files/aby";
-  require_once("$deep_root/aby.dbs.php");
+  $deep_root= "../files/hb";
+  require_once("$deep_root/hb.dbs.php");
 
   // parametry aplikace FiS
-  $app_name=  "Aby...";
-  $app_root=  'aby';
-  $app_js=    array('/aby/aby_user.js');
-  $app_css=   array('/aby/aby.css.php=skin',"/ezer$ezer_version/client/wiki.css");
+  $app_name=  "HledámBoha";
+  $app_root=  'hb';
+  $app_js=    array('/hb/hb_user.js');
+  $app_css=   array('/hb/hb.css.php=skin',"/ezer$ezer_version/client/wiki.css");
   $skin=      'ck';
   $title_style= $ezer_server==0 ? " style='color:#ef7f13'" : '' ;
   $title_flag=  $ezer_server==0 ? 'lokální' : '';

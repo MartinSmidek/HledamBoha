@@ -1,0 +1,129 @@
+# Aplikace HledámBoha
+# (c) 2022 Martin Šmídek <martin@smidek.eu>
+
+panel pre {type:'right', title:"[fa-pie-chart] Přehledy", _sys:'pri'
+  var this_item: ezer, this_par:object
+  var this_export: number
+  use rp: form _eko [12,4,,] 
+  use vz: form right [12,4,,] { 
+    check odkazy [-10,4,100,17] {title:'odkazy',style:'color:white', format:'t'
+      func onchange() { this_item.click() } } 
+  }
+  menu m {type:'left', active:m.uz.dar, format:'f+'
+    menu uz {title:'Přehledy',type:'group', _sys:'dar'
+      item dar {title:'[fa-euro] Přehled finančních darů'   
+          par:{typ:'D',off:'uz|his|rok',on:'VS|den',dary:'0',vs:'1',projekty:0}}
+      item {title:'[fa-euro] ... souhrn projektů'   
+          par:{typ:'D',off:'uz|his|rok',on:'VS|den',dary:'0',vs:'1',projekty:1}}
+      item  {title:'[fa-gift] Přehled věcných darů'         
+          par:{typ:'D',off:'uz|his|rok',on:'VS|den',dary:'1',vs:'1'}}
+      func onclick (i:ezer) { var tab:text
+        clear(); rp.display(1); vz.display(0);
+        this_item= i;
+        rp.display(0,i.par.off); rp.display(1,i.par.on);
+        rp.header(i);
+        rp.fill('','... počkejte prosím, provádím výpočet');
+        tab= i.par.projekty
+          ? php.eko_projekty_dary(this_export,rp.den_od,rp.den_do)
+          : php.eko_mesic_dary(this_export,rp.os,rp.fy,rp.den_od,rp.den_do,i.par.dary);
+        rp.fill('',tab);
+        this_export= 0;
+      }
+      item  {title:'[fa-download] Download kontaktů a darů',                               skill:'m'
+          par:{typ:'D',off:'uz|his|rok|VS|den',on:''}
+        func onclick (i:ezer) { var tab:text
+          clear(); rp.display(1); vz.display(0);
+          this_item= i;
+          rp.display(0,i.par.off); rp.display(1,i.par.on);
+          rp.header(i);
+          rp.fill('','... počkejte prosím, provádím výpočet');
+          tab= php.eko_download();
+          rp.fill('',tab);
+          this_export= 0;
+        }
+      }
+    }
+    menu {title:'Statistika',type:'group', _sys:'dar'
+      item dar {title:'[fa-bar-chart] Histogram finančních darů',
+//          par:{deleni:'300,1000;3000;10000;30000;100000;300000;1000000'}
+//          par:{deleni:'300,700,1000;1500,2000;3000,4000,10000;20000;50000;100000'}
+        func onclick (i:ezer) {
+          clear(); rp.display(1); vz.display(0);
+          this_item= i; rp.display(0,'VS|rok|uz'); rp.display(1,'his|den');
+          rp.header(i);
+          rp.fill('',php.eko_histogram(this_export,rp.den_od,rp.den_do,0,i.par,rp.deleni));
+          this_export= 0;
+      } }
+    }
+    menu {title:'Výroční zpráva',type:'group', _sys:'dar'
+      item {title:'[fa-file-text-o] individuální dárci '     
+        par:{kdo:'1',neucty:'',velky:5000,
+            nazev:'Individuální dárci',
+            velci:'Významní Individuální dárci NFSF'}}
+      item {title:'[fa-file-text-o] věcní dárci' 
+        par:{vecne:1,
+            nazev:'Dárci věcných darů a hmotné pomoci'}}
+      func onclick (i:ezer) {
+        clear(); rp.display(0); vz.display(1);
+        vz.header(i);
+        this_item= i; this_par= i.par;
+        vz.fill('',php.eko_vyrocka(this_par,vz.odkazy));
+      } 
+    }
+    func onstart () {
+      rp.rok= fdate('Y'); this_export= 0;
+      rp.den_od= sql2date(`${rp.rok}-01-01`);
+      rp.den_do= now(); 
+    }
+  }
+  # ------------------------------------------------------------------------------------------- _eko
+  # formulář pro levostranné menu
+  form _eko {//[,,750,600] {
+    label head [0,0,*,50] { title:'' }
+    label note [0,50,*,500] { title:'' }
+    label [-81,0,364,30] { tag:'den', css:'parm', style:'zIndex:1' }
+    button export [-20,5,,] { title:'Export', style:'zIndex:2'
+      func onclick() { this_export= 1; this_item.click(); } }
+    button go [-88,5,,] { tag:'den,rok', title:'[fa-refresh]', style:'zIndex:2'
+      func onclick() { this_item.click() } }
+    // rok
+    label [-79,0,163,30] { tag:'rok', css:'parm', style:'zIndex:1' }
+//    check nuly [-112,6,50,] { tag:'rok', title:'nuly', format:'t', value:'0' }
+    field rok [-167,6,50,] { tag:'rok', title:'rok', type:'date', format:'Rrt:y', help:'volba roku' }
+    // VS
+//    field VS [-336,6,45,] { tag:'VS', title:'VS:', format:'rt', help:'variabilní symbol: lze zapisovat pomocí ?,*'}
+    // den
+//    label [-214,0,158,30] { tag:'uz', css:'parm', style:'zIndex:1' }
+//    field uzaverka [-224,6,87,] {tag:'uz', title:'uzávěrka:', type:'date', format:'Rrt', 
+//      help:'datum uzávěrky darů', skill:'h|hddeu'
+//      func onchanged() {
+//        php.eko_uzaverka(date2sql(this));
+//        this= sql2date(php.eko_uzaverka_den());
+//    }}
+    // osoby, firmy
+    check fy [-331,4,50,] { title:'firmy' value:'1' }
+    check os [-388,4,58,] { title:'osoby' value:'1' }
+    // ode dne po den
+    field den_od [-224,6,87,] {tag:'den', title:'od:', type:'date', format:'Rrt', help:'počáteční datum včetně'}
+    field den_do [-115,6,87,] {tag:'den', title:'do:', type:'date', format:'Rrt', help:'koncové datum včetně'}
+    // his
+    label [5,32,,] { tag:'his', title:'dělící body:' }
+    field deleni [80,30,600,] { tag:'his', help:'dělící body histogramu', format:'t'
+        value:'300;1000;3000;10000;30000;100000;300000;1000000'
+//        value:'300,700,1000;1500,2000;3000,4000,10000;20000;50000;100000'
+      func onchanged () { this_item.click() } }
+    func header(i:ezer) { var i_owner:ezer
+      clear(); i_owner= i.owner();
+      head= replace_fa(`<div class='karta'>${i_owner.title} - ${i.title}</div>`);
+      note= '';
+    }
+    func fill(x,y) {
+      if (x) head= `<div class='karta'>${replace_fa(x)}</div>`;
+      if (y) note= y
+    }
+    func append(y) {
+      if (y) note= conc(note,y)
+    }
+  }
+}
+
