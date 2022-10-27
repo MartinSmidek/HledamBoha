@@ -1,0 +1,11 @@
+= Nastavení/3 =
+
+Modul pro správu dárců a darů pro ''HledámBoha.cz, z.s.'
+Obsahuje uživatelské, administrační a systémové karty.
+
+== Osobní nastavení ==
+Přístupové údaje si každý uživatel může nastavit sám.
+Oprávnění a osobní údaje mění administrátor systému (uživatel ''admin'').
+
+[[Image:wiki/img/ck_nastaveni.png||]]
+

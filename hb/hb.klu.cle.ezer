@@ -407,7 +407,7 @@ form _clen [,,399,251] {
   field narozeni [80,137,87,] { tag:'o', title:'dat.narození', type:'date', data:clen.narozeni }
   field nar_rok  [209,137,30,] { tag:'o', title:'jen rok' data:clen.narozeni_rok, format:'r' 
                                     help:'rok narození, pokud neznáme přesnější datum'  }
-  field clen_od  [308,137,87,] {tag:'k', type:'date', title:'v Klubu od', data:clen.clen_od, format:'n' }
+  field clen_od  [308,137,87,] {tag:'k', type:'date', title:'známe od', data:clen.clen_od, format:'n' }
 
   const zasi=185, oslo=268, pozn=343, hist= 443 // ----------------==> .. pozice částí karty
   # ==> .. zasílání - tag=z (zobrazí se při startu)
@@ -1206,7 +1206,7 @@ panel Duplicita [0,0,400,190] { title:' Eliminace duplicit', type:'popup', css:'
     field narozeni [80,146,87,] { tag:'o', title:'dat.narození', type:'date', data:clen.narozeni }
     field nar_rok  [209,146,30,] { tag:'o', title:'jen rok' data:clen.narozeni_rok, format:'r' 
                                       help:'rok narození, pokud neznáme přesnější datum'  }
-    field clen_od  [308,137,87,] {tag:'k', type:'date', title:'v Klubu od', data:clen.clen_od, format:'n' }
+    field clen_od  [308,137,87,] {tag:'k', type:'date', title:'známe od', data:clen.clen_od, format:'n' }
     # ==> funkce eliminace
     button [6,0,,] { title:"originál [fa-exchange] kopie" 
       func onclick() { var x:number

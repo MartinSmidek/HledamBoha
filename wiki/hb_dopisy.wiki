@@ -1,0 +1,32 @@
+= Korespondence/2 =
+Modul pro správu dárců a darů pro ''HledámBoha.cz, z.s.'
+
+== Šablony dopisů ==
+
+[[Image:wiki/img/ck_dopisy_sablona.png||]]
+
+// -------------------------------------------------------------------------------------------------- Vzory
+== Vzory dopisů ==
+Pro editaci textu šablony se používá stejné prostředí CKeditoru jako pro editaci textu dopisu.
+Odlišná je však možnost používat ''proměnné'', kterými je text doplněn informacemi z databáze.
+
+==== Seznam použitelných proměnných ====
+; {osloveni}            : oslovení např.: Milá paní Řezníčková
+; {dar_datum}           : datum přijetí daru
+; {dar_castka}          : hodnota daru
+; {jmeno_darce}         : jméno dárce
+; {adresa_clena}        : adresa člena - bydliště
+; {adresa_postovni}     : adresa člena nebo jeho sardinky
+; {cislo}               : členské číslo
+// ; {dary}                : soupis darů, za které děkujeme
+// ; {jmeno_clena}         : u fyzické osoby: titul jméno příjmení, u právnické osoby: firma řádek jméno
+// ; {jmeno_postovni}      : jméno člena, pokud má sardinku tak jméno sardinky a v závorce jméno člena)
+// ; {potvrzeni}           : dary pro daňové potvrzení
+// ; {ps}                  : P.S.: text ps
+// ; {rodne_cislo}         : Rodné číslo: yy mm dd / nnnn
+// ; {adresa_radek}        : adresa člena na 1 řádek
+// ; {diky}                : zformátované poděkování za dary
+
+[[Image:wiki/img/ck_dopisy.png||]]
+
+
