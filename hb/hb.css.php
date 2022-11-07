@@ -73,11 +73,11 @@ div.MenuGroup3 li.m { color:orange !important; text-shadow: 1px 1px 2px black; }
 .ae_butt_on {
   cursor:default; background-color:$b_work; z-index:0; border-radius:5px; }
 .ae_butt_off {
-  cursor:default; background-color:#effdf1; z-index:0; border-radius:5px; }
+  cursor:default; background-color:#EFF1FD; z-index:0; border-radius:5px; }
 .ae_butt_on:hover {
-  background:url("../skins/ck/label_switch_on_hover.png") repeat-x scroll 0 -1px transparent !important; }
+  background:url("../skins/ch/label_switch_on_hover.png") repeat-x scroll 0 -1px transparent !important; }
 .ae_butt_off:hover {
-  background:url("../skins/ck/label_switch_off_hover.png") repeat-x scroll 0 -1px transparent !important; }
+  background:url("../skins/ch/label_switch_off_hover.png") repeat-x scroll 0 -1px transparent !important; }
 /* rámečky formulářů */
 .ae_info        {
   background-color:#f5f5f5; border:1px solid #f5f5f5; z-index:-1; border-radius:5px; }

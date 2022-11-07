@@ -59,7 +59,7 @@ panel pre {type:'right', title:"[fa-pie-chart] Přehledy", _sys:'pri'
       item {title:'[fa-file-text-o] individuální dárci '     
         par:{kdo:'1',neucty:'',velky:5000,
             nazev:'Individuální dárci',
-            velci:'Významní Individuální dárci NFSF'}}
+            velci:'Významní Individuální dárci'}}
       item {title:'[fa-file-text-o] věcní dárci' 
         par:{vecne:1,
             nazev:'Dárci věcných darů a hmotné pomoci'}}

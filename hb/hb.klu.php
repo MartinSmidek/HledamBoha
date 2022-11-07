@@ -135,10 +135,11 @@ function klub_select_cleny($ids_clen,$caption,$barva='') {
 function klub_role_pripni($idf,$ido) {
   $ret= (object)array(msg=>'',ido=>0);
   list($idr,$role)= select('id_role,popis','role',"id_firma=$idf AND id_osoba=$ido");
-  if ($idr) {
-    $ret->msg= "POZOR tato osoba již má ve firmě roli '$role'";
-  }
-  elseif ($idf==$ido) {
+//  if ($idr) {
+//    $ret->msg= "POZOR tato osoba již má ve firmě roli '$role'";
+//  }
+//  else
+  if ($idf==$ido) {
     $ret->msg= "POZOR pokoušíte se připnout firmu k sobě samé ";
   }
   else {

@@ -1367,8 +1367,8 @@ function rz_mai_testuj($id_dopis) {  trace();
 # do tabulky MAIL dá seznam emailových adres pro rozeslání, pokud je $regenerate přepíše staré
 # záznamy, pokud ne a jsou dá zprávu do ret.again.
 function rz_mai_generuj($id_dopis,$regenerate=0) {  trace();
-  $TEST= 0;
-//  $TEST= 1;
+//  $TEST= 0;
+  $TEST= 1;
   $ret= (object)array();
   // zjisti podmínku výběru
   $dop= rz_mai_sql($id_dopis);
@@ -1634,8 +1634,8 @@ end:
 # pokud je definováno $foot tj. patička, připojí se na konec
 # použije se SMTP server podle SESSION
 function mail2_mai_send($id_dopis,$kolik,$from,$fromname,$test='',$id_mail=0,$foot='') { trace();
-  $TEST= 0;
-//  $TEST= 1;
+//  $TEST= 0;
+  $TEST= 1;
   // připojení případné přílohy
   $attach= function($mail,$fname) {
     global $ezer_root;

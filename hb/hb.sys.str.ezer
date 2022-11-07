@@ -6,8 +6,9 @@ const rows= 8, top_cmd= 88 + 136 // 136=8*17
 //use ss: form _strediska [12,4,,]
 use us: form _ucty [412,4,,]
 use ks: form _kategorie [12,4,,] // [12,264,,]
+use vs: form _vztahy [12,264,,] // [12,264,,]
 func onstart () {
-//  ss.Load();
+  vs.Load();
   us.Load();
   ks.Load();
 }
@@ -95,81 +96,83 @@ panel Kategorie [0,0,400,160] { title:'', type:'popup', css:'dialog'
     }
   }
 }
-//# =======================================================================================> Střediska
-//form _strediska [,,380,250] {css:'ae_parm'
-//  browse seznam [9,27,200,200] {qry_rows:1, rows:rows
-//    show cid            { data:_cis.id_cis, format:'s' }
-//    show druh           { data:_cis.druh, format:'s' }
-//    show dat   [,, 30,] { title:'id', data:_cis.data, format:'qsr' }
-//    show       [,, 50,] { title:'zkratka', data:_cis.zkratka, format:'qs' }
-//    show nazev [,,250,] { title:'název', data:_cis.hodnota, format:'qs+t' }
-//  }
-//  label [6,6,267,17] { title:'<b>Seznam středisek</b>' },
-//  button [18,top_cmd,,] {type:'submit', title:'Upravit', skill:'hnse|hnse'
-//    func onclick () { Strediska.Upravit(); } }
-//  button [214,top_cmd,,] {title:'Vytvořit', skill:'r|a'
-//    func onclick () { Strediska.Vytvorit(); } }
-//  button [272,top_cmd,,] {title:'Smazat', skill:'r|a'
-//    func onclick () { var n:number
-//      if (confirm(`Opravdu smazat středisko '${seznam.nazev}'?`)) {
-//        n= php.select('COUNT(*)','dar',`stredisko=${seznam.dat}`);
-//        if (n)
-//          alert(`POZOR na toto středisko je připsáno ${n} darů. Proto je nelze odstranit.`);
-//        else {
-//          php.query(`DELETE FROM _cis WHERE id_cis=${seznam.cid}`);
-//          the_formsave(form,ss.seznam);
-//          klu.cle.refresh_vyber();
-//          Load();
-//        }
-//      }
-//    }
-//  }
-//  func Load() { seznam.browse_load(`druh='${Strediska.druh}'`); }
-//}
-//# ----------------------------------------------------------------------------- 
-//panel Strediska [0,0,400,160] { title:'', type:'popup', css:'dialog'
-//  var druh= 'stredisko', druh_base= 3200
-//  func Upravit() { 
-//    panel.title= 'Úprava střediska';
-//    k.load(ss.seznam.cid); 
-//    panel.modal(300,100);
-//  }
-//  func Vytvorit() { 
-//    panel.title= 'Založení nového střediska';
-//    // návrh klíče
-//    k.init();
-//    k.druh= druh;
-//    k.dat= 1+php.select('MAX(0+data)','_cis',`druh='${druh}'`);
-//    k.cid= k.dat+druh_base;
-//    echo(`cid=${k.cid}, data=${k.dat}`);
-//    k.cid.change(); k.dat.change(); k.druh.change(); 
-//    k.zkratka.change(); k.nazev.change(); 
-//    panel.modal(300,100);
-//  }
-//  use k: form [0,0,*,*] {
-//    field cid  {data:_cis.id_cis }
-//    field druh {data:_cis.druh }
-//    field dat  [-10,0,40,] { data:_cis.data, format:'ro'}
-//    field zkratka [100,10,70,] { title:'zkratka:', data:_cis.zkratka }
-//    field nazev [100,40,200,] { title:'název:', data:_cis.hodnota }
-//    edit popis [100,70,200,80] { title:'popis střediska', data:_cis.popis, skill:'r|hns' }
-//    button [320,40,,] {title:'[fa-save] Uložit', help:'uložit změny',
-//      func onclick() { var n:number
-//        n= php.select('COUNT(*)','dar',`stredisko=${dat}`);
-//        if (n==0 || confirm(`POZOR tomuto středisku je připsáno ${n} darů, 
-//              změna jeho názvu by tedy neměla měnit smysl. Mám změnu uložit?`)) {
-//          the_formsave(form,ss.seznam);
-//        }
-//        panel.hide(form.key()) 
-//      }
-//    }
-//    button [320,70,,] { title:'[fa-undo] Zpět', help:'zadané údaje neukládat, vrátit se zpět'
-//      func onclick() { 
-//        panel.hide(0) 
-//      }
-//    }
-//  }
-//}
+# ==========================================================================================> Vztahy
+form _vztahy [,,380,250] {css:'ae_parm'
+  browse seznam [9,27,200,200] {qry_rows:1, rows:rows
+    show cid            { data:_cis.id_cis, format:'s' }
+    show druh           { data:_cis.druh, format:'s' }
+    show dat   [,, 30,] { title:'id', data:_cis.data, format:'qsr' }
+    show nazev [,,100,] { title:'vztah', data:_cis.zkratka, format:'qs' }
+    show leva  [,,100,] { title:'vztah zleva ...', data:_cis.ikona, format:'qs+t' }
+    show prava [,,100,] { title:'... vztah zprava', data:_cis.barva, format:'qs+t' }
+  }
+  label [6,6,267,17] { title:'<b>Seznam vztahů</b>' },
+  button [18,top_cmd,,] {type:'submit', title:'Upravit', skill:'hnse|hnse'
+    func onclick () { Vztahy.Upravit(); } }
+  button [214,top_cmd,,] {title:'Vytvořit', skill:'r|a'
+    func onclick () { Vztahy.Vytvorit(); } }
+  button [272,top_cmd,,] {title:'Smazat', skill:'r|a'
+    func onclick () { var n:number
+      if (confirm(`Opravdu smazat vztah '${seznam.nazev}'?`)) {
+        n= php.select('COUNT(*)','vztah',`vztah=${seznam.dat}`);
+        if (n)
+          alert(`POZOR tento vztah je ${n}x použitý v rolích. Proto jej nelze odstranit.`);
+        else {
+          php.query(`DELETE FROM _cis WHERE id_cis=${seznam.cid}`);
+          the_formsave(form,vs.seznam);
+          klu.cle.refresh_vyber();
+          Load();
+        }
+      }
+    }
+  }
+  func Load() { seznam.browse_load(`druh='${Vztahy.druh}'`); }
+}
+# ----------------------------------------------------------------------------- 
+panel Vztahy [0,0,400,160] { title:'', type:'popup', css:'dialog'
+  var druh= 'vztahy', druh_base= 3000
+  func Upravit() { 
+    panel.title= 'Úprava definice vztahu';
+    k.load(vs.seznam.cid); 
+    panel.modal(300,100);
+  }
+  func Vytvorit() { 
+    panel.title= 'Založení nové definice vztahu';
+    // návrh klíče
+    k.init();
+    k.druh= druh;
+    k.dat= 1+php.select('MAX(0+data)','_cis',`druh='${druh}'`);
+    k.cid= k.dat+druh_base;
+    echo(`cid=${k.cid}, data=${k.dat}`);
+    k.cid.change(); k.dat.change(); k.druh.change(); 
+    k.nazev.change(); k.leva.change(); k.prava.change(); 
+    panel.modal(300,100);
+  }
+  use k: form [0,0,*,*] {
+    field cid  {data:_cis.id_cis }
+    field druh {data:_cis.druh }
+    field dat  [-10,0,40,] { data:_cis.data, format:'ro'}
+    field nazev [100,10,70,] { title:'vztah:', data:_cis.zkratka }
+    field leva [100,40,200,] { title:'levá strana:', data:_cis.ikona }
+    field prava [100,70,200,] { title:'pravá strana:', data:_cis.barva }
+    edit popis [100,100,200,50] { title:'popis vztahu', data:_cis.popis, skill:'r|hns' }
+    button [320,40,,] {title:'[fa-save] Uložit', help:'uložit změny',
+      func onclick() { var n:number
+        n= php.select('COUNT(*)','vztah',`vztah=${dat}`);
+        if (n==0 || confirm(`POZOR tento vztah je použit v ${n} rolích osob, 
+              změna jeho názvu by tedy neměla měnit smysl. Mám změnu uložit?`)) {
+          the_formsave(form,vs.seznam);
+        }
+        panel.hide(form.key()) 
+      }
+    }
+    button [320,70,,] { title:'[fa-undo] Zpět', help:'zadané údaje neukládat, vrátit se zpět'
+      func onclick() { 
+        panel.hide(0) 
+      }
+    }
+  }
+}
 # ============================================================================================> účty
 form _ucty [,,380,250] {css:'ae_parm'
   browse seznam [9,27,200,200] {qry_rows:1, rows:rows

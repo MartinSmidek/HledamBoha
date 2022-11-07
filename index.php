@@ -16,7 +16,7 @@
   $app_root=  'hb';
   $app_js=    array('/hb/hb_user.js');
   $app_css=   array('/hb/hb.css.php=skin',"/ezer$ezer_version/client/wiki.css");
-  $skin=      'ck';
+  $skin=      'ch';
   $title_style= $ezer_server==0 ? " style='color:#ef7f13'" : '' ;
   $title_flag=  $ezer_server==0 ? 'lokální' : '';
 

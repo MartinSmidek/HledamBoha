@@ -36,7 +36,7 @@ menu hb { type:'main', active:*
         ],
         tables: {
           clen:   "id_clen>*,firma,jmeno,prijmeni",
-          role:   "id_role>*,id_osoba>clen,id_firma>clen,popis,priorita",
+          vztah:  "id_vztah>*,id_left>clen,id_right>clen,detail",
           ukol:   "id_ukol>*,id_clen>clen,kdo_od>clen,kdo_pro>clen,popis",
           dar:    "id_dar>*,id_clen>clen,id_projekt>projekt,zpusob,castka,castka_kdy",
           projekt:"id_projekt>*,nazev,suma,soubor",
@@ -191,11 +191,14 @@ table clen { key_id:'id_clen'
   text   zmena_kdo      { help:'změna kým|značka autora poslední změny' },
   date   zmena_kdy      { help:'změna kdy|čas poslední změny' },
 }
-table role { key_id:'id_role'
-  number id_role     { key:'primary', help:'kontakt|jedinečné číslo role' }
-  number id_firma    { help:'ID firmy|identifikace firmy s připnutými osobami' }
-  number id_osoba    { help:'ID osoby|připnutá osoba' }
-  text   popis       { help:'popis role' }
+table vztah { key_id:'id_vztah'
+  number id_vztah { key:'primary', help:'vztah|jedinečné číslo vztahu' }
+  number id_left  { help:'ID osoby|levá část vztahu' }
+  number id_right { help:'ID osoby|pravá část vztahu' }
+  text   deleted        { help:'ok|prázdné nebo D=značka smazání kontaktu' },
+  text   detail   { help:'detail vztahu' }
+  date   zahajeni { help:'zahájení vztahu', sql_pipe:'sql_date1' }
+  date   ukonceni { help:'ukončení vztahu', sql_pipe:'sql_date1' }
 }
 table ukol { key_id:'id_ukol'
   number id_ukol        { key:'primary', help:'dar|jedinečné číslo úkolu' }
@@ -392,5 +395,6 @@ map cis_k_ucet:         table _cis { where:"druh='b_ucty'", order:'data', key_id
 map cis_u_stavy:        table _cis { where:"druh='u_stavy'", order:'data', key_id:'data'}
 //map cis_k_zprava_jak:   table _cis { where:"druh='k_zprava_jak'", order:'data', key_id:'data'}
 map cis_kategorie:      table _cis { where:"druh='kategorie'", order:'zkratka', key_id:'data'}
+map cis_vztahy:         table _cis { where:"druh='vztahy'", order:'zkratka', key_id:'data'}
 map map_projekt:        table projekt { where:"1", order:'1', key_id:'id_projekt'}
 map map_projekt_donio:  table projekt { where:"typ=1", order:'nazev', key_id:'id_projekt'}

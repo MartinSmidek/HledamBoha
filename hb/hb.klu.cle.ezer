@@ -108,7 +108,7 @@ form _cleni [,,660,330] {
     func onchange () { show_os_fy(1) }
   }
   check cond_fy [484,14,72,17] { title:'firmy', format:"t",
-    help:'budou zobrazeni právnické osoby', value:'0'
+    help:'budou zobrazeni právnické osoby', value:'1'
     func onchange () { show_os_fy(1) }
   }
   // podmínky pro $kdy $kdo
@@ -156,8 +156,8 @@ form _cleni [,,660,330] {
   view c: table clen,
   browse cleni [4,34,0,0] {buf_rows:21, rows:14, qry_rows:1, wheel:5, 
       group_by:'id_clen', optimize:{fetch:'all'}
-    view rf: table role {join_type:'LEFT', join:"ON rf.id_osoba=c.id_clen"}
-    view ro: table role {join_type:'LEFT', join:"ON ro.id_firma=c.id_clen"}
+    view vl: table vztah {join_type:'LEFT', join:"ON vl.id_left=c.id_clen"}
+    view vr: table vztah {join_type:'LEFT', join:"ON vr.id_right=c.id_clen"}
     show del [,,0,] { title:'D', data:c.deleted, format:'q=' }
     show id_clen  [,, 43,] { title:'dárce', data:c.id_clen, format:'rq=s+' }
     show firma    [,,120,] { title:'firma', data:c.firma, format:'tq$s' 
@@ -168,8 +168,8 @@ form _cleni [,,660,330] {
     show ulice    [,, 90,] { title:'ulice', data:c.ulice, format:'tq$s' }
     show psc      [,, 42,] { title:'psč', data:c.psc, format:'q$s', sql_pipe:'psc' }
     show obec     [,, 90,] { title:'obec', data:c.obec, format:'tq$s' }
-    show has_f {data:rf.id_role}
-    show has_o {data:ro.id_role}
+    show has_l {data:vl.id_vztah}
+    show has_r {data:vr.id_vztah}
     show osoba {data:c.osoba}
 //    // položky pro podbloky možnost OPTIMALIZACE
 //    show kapri {data:c.psc,sql_pipe:'select_kapri2'}
@@ -183,10 +183,10 @@ form _cleni [,,660,330] {
     show rodcis   [,, 0,] { title:'rč/IČ',     data:c.rodcis,     format:'q$s' }
     show titul    [,, 0,] { title:'titul',     data:c.titul,      format:'q$s' }
     show telefony [,, 0,] { title:'telefony',  data:c.telefony,   format:'q$s' }
-    show email    [,,90,] { title:'email',     data:c.email,      format:'q$s' }
+    show email    [,, 0,] { title:'email',     data:c.email,      format:'q$s' }
     show potvrz   [,, 0,] { title:'potvrzení', data:c.potvrzeni,  format:'q#s',
       map_pipe:cis_k_potvrzeni.zkratka }
-    show kategorie[,, 0,] { title:'kategorie', data:c.kategorie, format:'q#s'
+    show kategorie[,,90,] { title:'kategorie', data:c.kategorie, format:'q#s'
       map_pipe:cis_kategorie.zkratka}
     show poznamka [,, 0,] { title:'poznámka',  data:c.poznamka,   format:'q$s' }
     // přepínání šířky sloupců
@@ -215,6 +215,11 @@ form _cleni [,,660,330] {
     func onrowclick() {
       znacka();
     }
+    # ==> vyvolá vztahy
+//    func onsubmit() {
+//      Clen.show_vztahy()
+//      if (osoba) Clen.if_osoba.onclick() else Clen.if_firma.onclick()
+//    }
     func onchange() {
       if (this.browse_count()) 
         znacka()
@@ -241,7 +246,11 @@ form _cleni [,,660,330] {
     }
     # ---------------------------------------==> . kontextové menu
     menu { type:'context'
-      item { title:'rozložit: příjmení=jméno-příjmení'
+      item { title:'zobraz vztahy'
+        func onclick () { 
+          VZTAH.PripniOsobu(id_clen);
+      } }
+      item { title:'-rozložit: příjmení=jméno-příjmení'
         func onclick () { 
           if (Clen.osoba=='osoba') { 
             Clen.jmeno= trim(split(Clen.prijmeni,' ',0)); Clen.jmeno.change(); 
@@ -305,6 +314,7 @@ form _clen [,,399,251] {
   var zalozka:ezer
   func onstart () { zalozka= &kon; form.display(1,'n') }
   func onload () { drop_show(); msg_del.display(substr(del,0,1)=='D'?1:0); }
+  # ==> zobraz kontakt jako osobu nebo firmu
   func Show(_zalozka:ezer) {
     zalozka= &_zalozka;
     switch (_zalozka._id) {
@@ -318,12 +328,12 @@ form _clen [,,399,251] {
     elseif (osoba.key()) {
       Clen.display(0,'f|F');
       Clen.display(1,'O');
-      Clen.if_osoba.display(Cleni.cleni.has_f?1:0);
+//      Clen.if_osoba.display(Cleni.cleni.has_f?1:0);
     }
     else {
       Clen.display(0,'o|O');
       Clen.display(1,'F');
-      Clen.if_firma.display(Cleni.cleni.has_o?1:0);
+//      Clen.if_firma.display(Cleni.cleni.has_o?1:0);
     }
     _zalozka.set_css('ae_butt_on','ae_butt_off'); 
   }
@@ -365,9 +375,9 @@ form _clen [,,399,251] {
       func onclick () {
         clipboard(`${titul} ${jmeno} ${prijmeni}`,ulice,`${psc} ${obec}`);
     }} 
-    item { title:'zobrazit připínání'
-      func onclick () { if (osoba) if_firma.onclick() else if_osoba.onclick();
-    }}
+//    item { title:'zobrazit připínání'
+//      func onclick () { if (osoba) if_firma.onclick() else if_osoba.onclick();
+//    }}
     item { title:'-vysvětlit oslovení'
       func onclick () { if (osoba) 
         alert(php.osl_insert(Clen.osoba.key(),Clen.titul,Clen.jmeno,Clen.prijmeni,'explain'));
@@ -378,18 +388,19 @@ form _clen [,,399,251] {
   label msg_del [4,39,75,15] { title:'je smazaný!', css:'chyba', format:'n' },
   field id       [349,0,40,]   { data:clen.id_clen, format:'or' }
   // ==> . jen firma
-  label [16,48,15,15] { tag:'f', title:'<i class="fa fa-users fa-green"></i>' 
-    func onclick() { if_firma.onclick(); }}
-  button if_firma [10,45,,] { tag:'f', title:'[fa-users fa-green]' 
-    func onclick() { ROLE.Osoby(id,firma); }}
+//  label [16,48,15,15] { tag:'f', title:'<i class="fa fa-users fa-green"></i>' 
+//    func onclick() { if_firma.onclick(); }}
+//  button if_firma [10,45,,] { tag:'f', title:'[fa-users fa-green]' 
+//    func onclick() { ROLE.Osoby(id,firma); }}
   field firma    [80,45,201,] {tag:'f,F', title:'firma', data:clen.firma, format:'F' }
   field ico      [314,45,74,] {tag:'f,F', title:'IČ', data:clen.ico, format:'r' },
   field info     [80,68,308,] {tag:'f,F', title:'info.', data:clen.firma_info, format:'F' }
   // ==> . jen osoba
-  label [16,71,15,15] { tag:'o', title:'<i class="fa fa-industry fa-green"></i>' 
-    func onclick() { if_osoba.onclick(); }}
-  button if_osoba [10,68,,] { tag:'o', title:'[fa-industry]' 
-    func onclick() { ROLE.Firmy(id,`${prijmeni} ${jmeno}`); }}
+//  label [16,71,15,15] { tag:'o', title:'<i class="fa fa-user fa-green"></i>' 
+//    func onclick() { show_vztahy.onclick(); }}
+//    func onclick() { if_osoba.onclick(); }}
+//  button if_osoba [10,68,,] { tag:'o', title:'[fa-industry]' 
+//    func onclick() { ROLE.Firmy(id,`${prijmeni} ${jmeno}`); }}
   field titul    [80,68,47,]   {tag:'o,O', title:'osoba', data:clen.titul },
   field prijmeni [137,68,106,] {tag:'o,O', data:clen.prijmeni, format:'F' },
   field jmeno    [251,68,100,] {tag:'o,O', data:clen.jmeno, format:'F' },
@@ -709,32 +720,24 @@ form _clen_butt [,,400,35] {
   func _clen_load (id) {
     Clen.load(id); _form_state('br|be','bc'); }
 }
-# ==============================================================================> R O L E VE FIRMÁCH
-panel ROLE [,,616,215] { title:'Seznam odob připnutých k ...', type:'popup', css:'dialog'
-    par:{close:'no'}
-  var typ:text,         // F=firma s připnutými osobami | O= osoba a firmy ke kterým je připnutá
-      id_owner:number,  // firma s připnutými osobami   | osoba a kam je připnutá
+# ===========================================================================================> VZTAH
+panel VZTAH [,,616,215] { title:'', type:'popup', css:'dialog'
+//    par:{close:'no'}
+  var typ:text,         // L=levá osoba je řídící | R= pravá osoba je řídící
+      id_pinned:number, // firma s připnutými osobami   | osoba a kam je připnutá
       id_member:number, // aktuální připnutá osoba      | aktuální připnutá firma
       old_vyber:number, old_os:number, old_fy:number // výběrová podmínka při staru
-  func Osoby(_id,firma) { // ==> .. zobraz osoby
-    typ= 'F'; id_owner= _id; id_member= 0; fo.init();
-    panel.title= `[fa-users] Seznam osob připnutých k "${firma}"`;  
-    fo.pripni= '[fa-plug] Připni osobu';
-    fo.odepni= '[fa-plug fa-rotate-180 fa-red] Odepni osobu';
-    fo.osoby.display(1); fo.firmy.display(0); 
+  func PripniOsobu(_id) { var nazev:text // ==> levá osoba vztahu je pevná
+    id_pinned= _id; id_member= 0; fo.init();
+    nazev= id2nazev(_id);
+    panel.title= `[fa-users] Seznam osob ve vztahu k "${nazev}"`;  
     fo.Refresh();
     save_vyber();
     panel.popup(9,404);
   }
-  func Firmy(_id,jmeno) { // .. zobraz firmy
-    typ= 'O'; id_owner= _id; id_member= 0; fo.init();
-    panel.title= `[fa-industry] Seznam firem ke kterým je osoba "${jmeno}" připnutý/á`;  
-    fo.pripni= '[fa-plug] Připni k firmě';
-    fo.odepni= '[fa-plug fa-rotate-180 fa-red] Odepni z firmy';
-    fo.osoby.display(0); fo.firmy.display(1); 
-    fo.Refresh();
-    save_vyber();
-    panel.popup(9,404);
+  func id2nazev(_id) { var row:object
+    row= php.select_object('osoba,jmeno,prijmeni,firma','clen',`id_clen=${_id}`);
+    return row.osoba ? `${_id}: ${row.prijmeni} ${row.jmeno}` : `${_id}: ${row.firma}`;      
   }
   func save_vyber() {
     old_vyber= Cleni.cond.key();
@@ -750,79 +753,67 @@ panel ROLE [,,616,215] { title:'Seznam odob připnutých k ...', type:'popup', c
     Cleni.cond_os= old_os;
     Cleni.cleni.osoba_firma(old_os,old_fy);
     Cleni.cond.key(old_vyber);
-    Cleni._cleni_vyber(id_owner);
+    Cleni._cleni_vyber(id_pinned);
     panel.hide(on)
   }
   use fo: form {
-    view r: table role
+    view v: table vztah
     browse osoby [7,7,483,200] { rows:10, qry_rows:0, 
-      view c: table clen {join:'ON r.id_osoba=c.id_clen' }
-      show idr { data:r.id_role }
-      show idc [,,50,] { title:'ID osoby', data:c.id_clen, format:'r' }
-      show [,,50,] { title:'titul', data:c.titul, format:'q$s' }
-      show pr [,,75,] { title:'příjmení', data:c.prijmeni, format:'tq$s+' }
-      show jm [,,55,] { title:'jméno', data:c.jmeno, format:'tq$s' }
-      show [,,80,] { title:'telefon', data:c.telefony, format:'q*s' }
-      show role [,,140,] { title:'role ve firmě', data:r.popis }
+      view c: table _cis {join:"ON c.druh='vztahy' AND c.data=v.vztah" }
+      view l: table clen {join:'ON v.id_left=l.id_clen' }
+      view p: table clen {join:'ON v.id_right=p.id_clen' }
+      show idv { data:v.id_vztah }
+      show { data:c.id_cis }
+      show idm [,,50,] { title:'member', expr:"IF(l.id_clen=@pinned,p.id_clen,l.id_clen)", format:'r' }
+      show nazev [,,100,] { title:'osoba', expr:
+        "IF(l.id_clen=@pinned,IF(p.osoba,CONCAT(p.prijmeni,' ',p.jmeno),p.firma),IF(l.osoba,CONCAT(l.prijmeni,' ',l.jmeno),l.firma))", format:'q$s' }
+      show vztah [,,100,] { title:'vztah', expr:
+        "IF(l.id_clen=@pinned,c.barva,c.ikona)", format:'q$s' }
+      show detail [,,70,] { title:'detail', data:v.detail }
       func onrowclick () { 
-        id_member= idc; form.load(idr); 
-        if (!show_clen(idc)) alert(`v takto nastaveném výběru není "${pr} ${jm}" viditelný/á`)
+        id_member= idm; 
+        form.load(idv); 
+        if (!show_clen(idm)) alert(`v takto nastaveném výběru není "${idm}" viditelný/á`)
       }
     }
-    browse firmy [7,7,483,200] { rows:10, qry_rows:0, 
-      view c: table clen {join:'ON r.id_firma=c.id_clen' }
-      show idr { data:r.id_role }
-      show idc [,,70,] { title:'ID firmy', data:c.id_clen, format:'r' }
-      show fy [,,200,] { title:'firma',     data:c.firma,      format:'q$s' }
-      show role [,,183,] { title:'role osoby ve firmě', data:r.popis }
-      func onrowclick () { 
-        id_member= idc; form.load(idr); 
-        if (!show_clen(idc)) alert(`v takto nastaveném výběru není "${fy}" viditelná`)
-      }
-    }
-    button pripni [505,10,,] { title:''
+    button pripni [505,10,,] { title:'[fa-plug] Nový vztah'
       func onclick () { var ret:object, osoba:number
         id_member= Cleni.cleni.browse_key(); 
-        if (typ=='F' && !Cleni.cleni.osoba) alert("k firmě není možné připnout jinou firmu")
-        elseif (typ=='O' && Cleni.cleni.osoba) alert("osobu je možné připnout jen k firmě")
+        ret= php.klub_role_pripni(id_pinned,id_member);
+        if (ret.msg) 
+          alert(ret.msg) 
         else {
-          ret= php.klub_role_pripni(typ=='F'?id_owner:id_member,typ=='F'?id_member:id_owner);
-          if (ret.msg) 
-            alert(ret.msg) 
-          else {
-            Refresh();
-            nova_role.change();
-          }
+          Refresh();
+          nova_role.change();
         }
-    }}
-    button odepni [505,40,,] { title:''
+      }
+    }
+    button odepni [505,36,,] { title:'[fa-plug fa-rotate-180 fa-red] Zruš vztah'
       func onclick () { 
-        php.klub_role_odepni(typ=='F'?id_owner:id_member,typ=='F'?id_member:id_owner);
+        php.klub_role_odepni(id_pinned,id_member);
         id_member= 0;
         Refresh();
     }}
-    button [505,70,,] { title:'[fa-undo] Zpět', help:'návrat'
-      func onclick () { show_clen(id_owner); Back(0) }
+    button [505,61,,] { title:'[fa-undo] Zpět', help:'návrat'
+      func onclick () { show_clen(id_pinned); Back(0) }
     }
     # ==> . změna role
-    field {data:r.id_role}
-    field nova_role [506,164,100,] { title:'^role ve firmě', data:r.popis }
+    field {data:v.id_vztah}
+    field nova_role [506,102,100,] { title:'^vztah', data:v.detail}
+    field zahajeni  [506,136,90,] { type:'date', title:'^zahájení', data:v.zahajeni, format:'r' }
+    field ukonceni  [506,170,90,] { type:'date', title:'^ukončení', data:v.ukonceni, format:'r' }
     button [505,194,,] { title:'[fa-save] Ulož změnu role', help:'ulož změnu role'
       func onclick () { 
-        if ((typ=='F' ? osoby.browse_count() : firmy.browse_count()) && !form.same()) { 
+        if (osoby.browse_count() && !form.same()) { 
           form.save(); Refresh(); 
         } 
     }}
     # ==> .funkce
     func Refresh() { 
-      if (typ=='F') { // zobraz osoby
-        if (!id_member) osoby.browse_load(`r.id_firma=${id_owner}`); 
-        else osoby.browse_seek(`r.id_osoba=${id_member}`,`r.id_firma=${id_owner}`); 
-      }
-      else { // zobraz firmy
-        if (!id_member) firmy.browse_load(`r.id_osoba=${id_owner}`); 
-        else firmy.browse_seek(`r.id_firma=${id_member}`,`r.id_osoba=${id_owner}`); 
-      }
+      if (!id_member) 
+        osoby.browse_load('l.id_clen=@pinned OR p.id_clen=@pinned','','','','','',`SET @pinned=${id_pinned}`); 
+      else 
+        osoby.browse_seek('l.id_clen=@pinned OR p.id_clen=@pinned','',`SET @pinned=${id_pinned}`); 
     }
   }
 }
