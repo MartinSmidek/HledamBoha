@@ -193,10 +193,12 @@ table clen { key_id:'id_clen'
 }
 table vztah { key_id:'id_vztah'
   number id_vztah { key:'primary', help:'vztah|jedinečné číslo vztahu' }
+  number vztah    { help:'vztah'}
   number id_left  { help:'ID osoby|levá část vztahu' }
   number id_right { help:'ID osoby|pravá část vztahu' }
   text   deleted        { help:'ok|prázdné nebo D=značka smazání kontaktu' },
   text   detail   { help:'detail vztahu' }
+  text   note     { help:'poznámka ke vztahu' }
   date   zahajeni { help:'zahájení vztahu', sql_pipe:'sql_date1' }
   date   ukonceni { help:'ukončení vztahu', sql_pipe:'sql_date1' }
 }

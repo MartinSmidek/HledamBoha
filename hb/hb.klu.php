@@ -130,23 +130,6 @@ function klub_select_cleny($ids_clen,$caption,$barva='') {
 //  $style= $barva ? "style='color:$barva'" : '';
 //  return "<b><a $style href='ezer://klu.dry.show_dar/$id_dar'>$id_dar</a></b>";
 //}
-# --------------------------------------------------------------------------------- klub role_pripni
-# připne osobu k firmě 
-function klub_role_pripni($idf,$ido) {
-  $ret= (object)array(msg=>'',ido=>0);
-  list($idr,$role)= select('id_role,popis','role',"id_firma=$idf AND id_osoba=$ido");
-//  if ($idr) {
-//    $ret->msg= "POZOR tato osoba již má ve firmě roli '$role'";
-//  }
-//  else
-  if ($idf==$ido) {
-    $ret->msg= "POZOR pokoušíte se připnout firmu k sobě samé ";
-  }
-  else {
-    query("INSERT INTO role SET id_firma=$idf, id_osoba=$ido");
-  }
-  return $ret;
-}
 # --------------------------------------------------------------------------------- klub clen_delete
 # smaže člena, pokud k němu není nic připnuto
 function klub_clen_delete($idc) {
@@ -168,10 +151,54 @@ function klub_clen_delete($idc) {
   }
   return $msg;
 }
-# --------------------------------------------------------------------------------- klub role_odepni
-# odepne osobu z firmy
-function klub_role_odepni($idf,$ido) {
-  query("DELETE FROM role WHERE id_firma=$idf AND id_osoba=$ido");
+/** *****************************************************************************=*********==> VZTAH */
+# ------------------------------------------------------------------------------- klub vztah_selects
+# vytvoří vztah mezi osobami - podle hodnoty $demi_vztah pozná orientaci
+function klub_vztah_selects() {
+  $sel= $del= '';
+  $rv= pdo_qry("SELECT ikona,barva FROM _cis WHERE druh='vztahy' ORDER BY poradi");
+  while ($rv && (list($left,$right)= pdo_fetch_row($rv))) {
+    $sel.= "$del$left,$right";
+    $del= ',';
+  }
+  return $sel;
+}
+# ----------------------------------------------------------------------------------- klub vztah_add
+# vytvoří vztah mezi osobami - podle hodnoty $demi_vztah pozná orientaci
+function klub_vztah_add($pinned,$member,$demi_vztah) {
+  $ret= (object)array(msg=>'',idv=>0);
+  list($vztah,$left)= select('data,ikona','_cis',"'$demi_vztah' IN (ikona,barva)");
+  if ($demi_vztah==$left) { // pinned-member
+    $idl= $pinned;
+    $idr= $member;
+  }
+  else { // member-pinned
+    $idl= $member;
+    $idr= $pinned;
+  }
+  $ret->idv= ezer_qry("INSERT",'vztah',0,array(
+    (object)array('fld'=>'id_left',   'op'=>'i','val'=>$idl),
+    (object)array('fld'=>'id_right',  'op'=>'i','val'=>$idr),
+    (object)array('fld'=>'vztah',     'op'=>'i','val'=>$vztah)
+  ));
+  return $ret;
+}
+# ----------------------------------------------------------------------------------- klub vztah_del
+# zruší vztah mezi osobami
+function klub_vztah_del($pinned,$member,$demi_vztah) {
+  list($vztah,$left)= select('data,ikona','_cis',"'$demi_vztah' IN (ikona,barva)");
+  if ($demi_vztah==$left) { // pinned-member
+    $idl= $pinned;
+    $idr= $member;
+  }
+  else { // member-pinned
+    $idl= $member;
+    $idr= $pinned;
+  }
+  $idv= select('id_vztah','vztah',"id_left=$idl AND id_right=$idr AND vztah=$vztah");
+  ezer_qry("UPDATE",'vztah',$idv,array(
+    (object)array('fld'=>'deleted',  'op'=>'u','val'=>'D')
+  ));
 }
 /*
 # -------------------------------------------------------------------------------- klub oprav_prevod
