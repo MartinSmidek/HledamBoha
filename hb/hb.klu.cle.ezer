@@ -820,16 +820,16 @@ panel VZTAHY [,,616,215] { title:'[fa-user] Zvolená osoba a její vztahy k osta
     } }
     const short='text-overflow: ellipsis;white-space: nowrap;overflow:hidden'
     label pinned [18,3,200,15] { help:'připnutá osoba vztahu', style:short}
-    select vztahy [260,0,150,] 
-    label [413,3,15,15] { title:'<i class="fa fa-users fa-green"></i>' }
-    label member [430,3,200,15] { help:'osoba vztahu', style:short}
+    select vztahy [240,0,150,] 
+    label [393,3,15,15] { title:'<i class="fa fa-users fa-green"></i>' }
+    label member [410,3,200,15] { help:'osoba vztahu', style:short}
     # ==> funkce
     # ==> . změna vztahu
     field id_vztah {data:v.id_vztah}
     field detail    [0,37,178,] { title:'^detail vztahu', data:v.detail}
-    field zahajeni  [0,76,90,] { type:'date', title:'^zahájení', data:v.zahajeni, format:'r' }
-    field ukonceni  [100,76,90,] { type:'date', title:'^ukončení', data:v.ukonceni, format:'r' }
-    edit note       [0,106,50,80] { title:'^poznámka', data:v.note}
+    field zahajeni  [0,75,90,] { type:'date', title:'^zahájení', data:v.zahajeni, format:'r' }
+    field ukonceni  [100,75,90,] { type:'date', title:'^ukončení', data:v.ukonceni, format:'r' }
+    edit note       [0,114,183,71] { title:'^poznámka', data:v.note}
     button [0,194,,] { title:'[fa-save] Uložit změnu', help:'ulož změnu vztahu'
       func onclick () { var ret:object, osoba:number
         if (id_vztah) { // opravíme hodnoty
