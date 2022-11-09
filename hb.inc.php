@@ -33,7 +33,7 @@
   // archiv sql
   $path_backup= "$deep_root/sql";
   
-  $tracked= ',clen,dar,projekt,ukol,dopis,role,_user,_cis,';
+  $tracked= ',clen,dar,projekt,ukol,dopis,vztah,_user,_cis,';
   
   // PHP moduly aplikace Ark
   $app_php= array(

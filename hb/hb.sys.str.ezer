@@ -162,6 +162,8 @@ panel Vztahy [0,0,400,160] { title:'', type:'popup', css:'dialog'
         if (n==0 || confirm(`POZOR tento vztah je použit v ${n} rolích osob, 
               změna jeho názvu by tedy neměla měnit smysl. Mám změnu uložit?`)) {
           the_formsave(form,vs.seznam);
+          cis_vztahy.map_load();
+          hb.dirty('klu.cle');
         }
         panel.hide(form.key()) 
       }

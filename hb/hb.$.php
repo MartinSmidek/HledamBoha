@@ -9,7 +9,7 @@ function aby_truncate() { trace();
   query("TRUNCATE TABLE dar");
   query("TRUNCATE TABLE clen");
   query("TRUNCATE TABLE ukol");
-  query("TRUNCATE TABLE role");
+  query("TRUNCATE TABLE vztah");
   query("TRUNCATE TABLE projekt");
   query("TRUNCATE TABLE vypis");
   // vymaž banka
@@ -23,7 +23,7 @@ function aby_truncate() { trace();
       closedir($handle);
     }
   }  
-  return "tabulky clen, role, dar, ukol, projekt, vypis a soubory banka/* jsou vyprázdněny";
+  return "tabulky clen, vztah, dar, ukol, projekt, vypis a soubory banka/* jsou vyprázdněny";
 }
 # --------------------------------------------------------------------------------------- aby import
 # primární import dat

@@ -13,10 +13,11 @@ function klub_spoj($id_copy,$id_orig) {
   // dar: id_clen
   $dar=   select("GROUP_CONCAT(id_dar)",  "dar",  "id_clen=$id_copy");
   query("UPDATE dar SET id_clen=$id_orig WHERE id_clen=$id_copy");
-  // role: id_osoba + id_firma
-  $role= select("GROUP_CONCAT(id_role)","role","id_osoba=$id_copy OR id_firma=$id_copy");
-  query("UPDATE role SET id_osoba=$id_orig WHERE id_osoba=$id_copy");
-  query("UPDATE role SET id_firma=$id_orig WHERE id_firma=$id_copy");
+  // vztah: id_left + id_right
+  $vztah_L= select("GROUP_CONCAT(id_vztah)","vztah","id_left=$id_copy");
+  query("UPDATE vztah SET id_left=$id_orig WHERE id_left=$id_copy");
+  $vztah_R= select("GROUP_CONCAT(id_vztah)","vztah","id_right=$id_copy");
+  query("UPDATE vztah SET id_right=$id_orig WHERE id_right=$id_copy");
   // ukol: id_clen
   $ukol= select("GROUP_CONCAT(id_ukol)","ukol","id_clen=$id_copy");
   query("UPDATE ukol SET id_clen=$id_orig WHERE id_clen=$id_copy");
@@ -24,7 +25,7 @@ function klub_spoj($id_copy,$id_orig) {
   $mail= select("GROUP_CONCAT(id_mail)","mail","id_clen=$id_copy");
   query("UPDATE mail SET id_clen=$id_orig WHERE id_clen=$id_copy");
   // zápis o ztotožnění osob do _track jako op=d (duplicita)
-  $info= "dar:$dar;role:$role;ukol:$ukol;mail:$mail";
+  $info= "dar:$dar;vztah/L:$vztah_L;vztah/R:$vztah_R;ukol:$ukol;mail:$mail";
   // smazání kopie a zápis do _track
   query("UPDATE clen SET deleted='D clen=$id_orig' WHERE id_clen=$id_copy");
   $user= $USER->abbr;
@@ -42,10 +43,13 @@ end:
 function klub_vyber($cmd,$key=0) {
   $conds= array(); // [key:{nazev,cond},...]
   $conds[1]= (object)array(nazev=>'všichni',cond=>" 1");
-  $rk= pdo_query("SELECT data,hodnota FROM _cis WHERE druh='kategorie' ORDER BY zkratka ");
-  while ($rk && (list($data,$nazev)= pdo_fetch_row($rk))) {
-    $conds[$data+10]= (object)array(nazev=>"kategorie - $nazev",cond=>" FIND_IN_SET('$data',kategorie)");
-  }
+//  $rk= pdo_query("SELECT data,hodnota FROM _cis WHERE druh='kategorie' ORDER BY zkratka ");
+//  while ($rk && (list($data,$nazev)= pdo_fetch_row($rk))) {
+//    $conds[$data+10]= (object)array(nazev=>"kategorie - $nazev",cond=>" FIND_IN_SET('$data',kategorie)");
+//  }
+  $conds[90]= (object)array(nazev=>'podle kategorie',cond=>" /*k*/ FIND_IN_SET('\$kategorie',kategorie)");
+  $conds[91]= (object)array(nazev=>'podle vztahů',
+      cond=>" /*v*/ (vl.vztah='\$vztah' AND vl.deleted='' OR vr.vztah='\$vztah' AND vr.deleted='')");
   $conds[100]= (object)array(nazev=>'podezřelé adresy osob',cond=>" (jmeno REGEXP '\\\\\\\\s|\\\\\\\\.' OR prijmeni REGEXP '\\\\\\\\s|\\\\\\\\.')");
   $conds[101]= (object)array(nazev=>'změny tohoto měsíce',cond=>" month(c.zmena_kdy)=month(now()) and year(c.zmena_kdy)=year(now()) ");
   $conds[102]= (object)array(nazev=>'změny kým ...',cond=>" c.zmena_kdo=\$user");
@@ -135,11 +139,11 @@ function klub_select_cleny($ids_clen,$caption,$barva='') {
 function klub_clen_delete($idc) {
   global $USER;
   $msg= '';
-  $n= select('COUNT(*)','role',"id_firma=$idc OR id_osoba=$idc");
+  $n= select('COUNT(*)','vztah',"id_left=$idc OR id_right=$idc");
   $m= select('COUNT(*)','dar',"id_clen=$idc AND deleted='' ");
   if ($n||$m) {
     if ($n) {
-      $msg= "před smazáním je třeba od tohoto kontaktu odepnout $n připnutí";
+      $msg= "před smazáním je třeba tento kontakt rozpojit z $n vztahů";
     }
     elseif ($m) {
       $msg= "před smazáním osoby je třeba smazat nebo přepsat jejích $m darů";

@@ -16,7 +16,7 @@ use Dar: form _dar [270,340,,] {  skill:'hdd' }
 
 func onstart () {
   modul_state.klu.cle= {active:1,dirty:0};   # poznačení, že modul je aktivní
-  Cleni.cleni.osoba_firma(Cleni.cond_os,Cleni.cond_fy);
+//  Cleni.cleni.osoba_firma(Cleni.cond_os,Cleni.cond_fy);
   Cleni.cond.Refresh();
   Clen.kon.onclick();
   if (has_skill('hdd'))
@@ -29,6 +29,8 @@ func onfocus () {
   if (modul_state.klu.cle.dirty) {
     Clen.kategorie.set_attrib('options','cis_kategorie.hodnota'); 
     Dar.pro.set_attrib('options','map_projekt.nazev'); 
+    Cleni.cond_kategorie.set_attrib('options','cis_kategorie.hodnota'); 
+    Cleni.cond_vztahy.set_attrib('options','cis_vztahy.hodnota'); 
     Cleni.cleni.browse_refresh();
     modul_state.klu.cle.dirty= 0;
   }
@@ -90,6 +92,8 @@ form _cleni [,,660,330] {
       _cond= php.klub_vyber('cond',cond.key());
       cond_dne.display(match("\$datum",_cond));
       cond_kdo.display(match("\$user",_cond));
+      cond_kategorie.display(match("/\*k\*/",_cond));
+      cond_vztahy.display(match("/\*v\*/",_cond));
       _cleni_vyber(0);
     }
     func Refresh() {
@@ -98,41 +102,48 @@ form _cleni [,,660,330] {
       _cleni_vyber(0);
     }
   }
-  // rozhodnutí firma / osoba
-  func show_os_fy(reload) {
-    if (!cond_os&&!cond_fy) {cond_os= 1; cond_fy= 1 };
-    cleni.osoba_firma(cond_os,cond_fy); 
-    if (reload) _cleni_vyber(0);
+  // podmínky pro kategorii
+  select cond_kategorie [240,9,200,] { tag:'c', type:'map', options:cis_kategorie.hodnota, format:'nxt',
+    func onchanged() { _cleni_vyber(0) } 
   }
-  check cond_os [484,0,72,17] { title:'osoby', format:"t",
-    help:'budou zobrazeni fyzické osoby', value:'1'
-    func onchange () { show_os_fy(1) }
-  }
-  check cond_fy [484,14,72,17] { title:'firmy', format:"t",
-    help:'budou zobrazeni právnické osoby', value:'1'
-    func onchange () { show_os_fy(1) }
+  // podmínky pro vztahy
+  select cond_vztahy [240,9,200,] { tag:'c', type:'map', options:cis_vztahy.zkratka, format:'nxt',
+    func onchanged() { _cleni_vyber(0) } 
   }
   // podmínky pro $kdy $kdo
-  field cond_dne [240,9,87,] { format:'xt', type:'date', sql_pipe:'sql_date1', format:'n'
+  field cond_dne [240,9,87,] { tag:'c', type:'date', sql_pipe:'sql_date1', format:'nxt'
     help:'kdy|uplatní se jen ve výběrech s kdy:...'
     func onchanged () { _cleni_vyber(0) } 
   }
-  select cond_kdo [333,9,83,] { type:'map', options:user2.surname, format:'nxt',
+  select cond_kdo [333,9,83,] { tag:'c', type:'map', options:user2.surname, format:'nxt',
     help:'kdo|uplatní se jen ve výběrech s kdo:...'
     func onchanged() { _cleni_vyber(0) } 
   }
   // 
-  check cond_xel [562,14,72,17] { title:'i zemřelí', format:"t",
+  check cond_xel [562,14,72,17] { tag:'c', title:'i zemřelí', format:"t",
     help:'budou zobrazeni i zemřelí', value:'0'
     func onchange () { _cleni_vyber(0) } 
   }
+  # přepínání_sloupce_del
+  check cond_del [562,0,86,17] { tag:'c', title:'i smazaní', format:"t",
+    help:'budou zobrazeni i smazaní', value:'0'
+    func onchange () {
+      if (this) { cleni.del.width(10); cleni.id_clen.width(32) }
+      else { cleni.del.width(0); cleni.id_clen.width(43) };
+      _cleni_vyber(0) 
+    }
+  }
   func _cleni_vyber (idc) { var where:text
-    where= replace(_cond,'$user',cond_kdo.key(),'$datum',date2sql(cond_dne));
+    if (VZTAHY.Active()) VZTAHY.Hide();
+    where= replace(_cond,
+      '$user',cond_kdo.key(),
+      '$datum',date2sql(cond_dne),
+      '$kategorie',cond_kategorie.key(),
+      '$vztah',cond_vztahy.key()
+    );
     where= conc(where,
       cond_del ? '' : " AND left(c.deleted,1)!='D'",
-      cond_xel ? '' : " AND umrti=0",
-      cond_os&&!cond_fy ? " AND osoba=1" : '',
-      !cond_os&&cond_fy ? " AND osoba=0" : ''
+      cond_xel ? '' : " AND umrti=0"
     );
     Clen.init(); 
     Dary.dary.browse_init(); Dar.init(); Dar._form_state('','b.');
@@ -142,16 +153,9 @@ form _cleni [,,660,330] {
       cleni.browse_load(where);
   }
   func ShowAll() { 
+    cond.key(1); 
+    form.display(0,'c');
     cleni.browse_load("left(c.deleted,1)!='D' AND umrti=0");
-  }
-  # přepínání_sloupce_del
-  check cond_del [562,0,86,17] { title:'i smazaní', format:"t",
-    help:'budou zobrazeni i smazaní', value:'0'
-    func onchange () {
-      if (this) { cleni.del.width(10); cleni.id_clen.width(32) }
-      else { cleni.del.width(0); cleni.id_clen.width(43) };
-      _cleni_vyber(0) 
-    }
   }
   # ---------------------------------------==> . vybraný seznam členů
   view c: table clen,
@@ -161,18 +165,20 @@ form _cleni [,,660,330] {
     view vr: table vztah {join_type:'LEFT', join:"ON vr.id_right=c.id_clen"}
     show del [,,0,] { title:'D', data:c.deleted, format:'q=' }
     show id_clen  [,, 43,] { title:'dárce', data:c.id_clen, format:'rq=s+' }
-    show firma    [,,120,] { title:'firma', data:c.firma, format:'tq$s' 
-        css_cell:'osoba,0:zluty' }
-    show f_info   [,,120,] { title:'firma info.', data:c.firma_info, format:'tq$s' }
-    show prijmeni [,, 80,] { title:'příjmení', data:c.prijmeni, format:'tq$s' }
-    show jmeno    [,, 60,] { title:'jméno', data:c.jmeno, format:'tq$s' }
-    show ulice    [,, 90,] { title:'ulice', data:c.ulice, format:'tq$s' }
+    show nazev [,,240,] { title:'osoba: firma nebo příjmeni a jméno', css_cell:'osoba,0:zluty', 
+      expr:"IF(c.osoba,CONCAT(c.prijmeni,' ',c.jmeno),c.firma)", format:'q$s' }
+//    show firma    [,,120,] { title:'firma', data:c.firma, format:'tq$s' 
+//        css_cell:'osoba,0:zluty' }
+//    show f_info   [,,120,] { title:'firma info.', data:c.firma_info, format:'tq$s' }
+//    show prijmeni [,, 80,] { title:'příjmení', data:c.prijmeni, format:'tq$s' }
+//    show jmeno    [,, 60,] { title:'jméno', data:c.jmeno, format:'tq$s' }
+    show ulice    [,,110,] { title:'ulice', data:c.ulice, format:'tq$s' }
     show psc      [,, 42,] { title:'psč', data:c.psc, format:'q$s', sql_pipe:'psc' }
     show obec     [,, 90,] { title:'obec', data:c.obec, format:'tq$s' }
     show has_l {data:vl.id_vztah}
     show has_r {data:vr.id_vztah}
     show osoba {data:c.osoba}
-//    // položky pro podbloky možnost OPTIMALIZACE
+    // položky pro podbloky možnost OPTIMALIZACE
 //    show kapri {data:c.psc,sql_pipe:'select_kapri2'}
 //    show dary  {data:c.id_clen,sql_pipe:'pipe_dary:new,valid'}
 //    show dar1  {data:c.id_clen,sql_pipe:'pipe_dar:new,valid'}
@@ -202,12 +208,6 @@ form _cleni [,,660,330] {
       elseif ( poznamka.width() ) {  poznamka.width(0);  zdroj.width(90); }
       elseif ( potvrz.width() ) {    potvrz.width(0);    zdroj.width(90); }
     }
-    // osoba nebo firma
-    func osoba_firma(os,fy) {
-      if (os && fy) { firma.width(70); f_info.width(70); prijmeni.width(60); jmeno.width(60); }
-      elseif (os && !fy) { firma.width(0); f_info.width(0); prijmeni.width(130); jmeno.width(130); }
-      elseif (!os && fy) { firma.width(130); f_info.width(130); prijmeni.width(0); jmeno.width(0); }
-    }
     # výběr_posledního_sloupce
     show kdo { data:c.zmena_kdo },
     show kdn { data:c.zmena_kdo, map_pipe:user.abbr },
@@ -215,7 +215,7 @@ form _cleni [,,660,330] {
     # události
     func onrowclick() {
       znacka(); 
-      if (VZTAHY.Active() && !VZTAHY.id_member || VZTAHY.id_member!=id_clen) 
+      if (VZTAHY.Active() && (!VZTAHY.id_member || VZTAHY.id_member!=id_clen)) 
         VZTAHY.PravaOsoba(id_clen);
     }
     # ==> vyvolá vztahy
@@ -323,7 +323,7 @@ form _clen [,,399,251] {
     zalozka= &_zalozka;
     switch (_zalozka._id) {
       case 'kon': tags('z|k|n|h|o|f','d|u',1,0); break;
-      case 'doc': tags('d|O|F','u|z|o|f|h|n|k',1,0); break;
+      case 'doc': tags('d|O|F','u|z|o|f|h|n|k',1,0); drop_show(); break;
       case 'ukl': tags('u|O|F','d|z|o|f|h|n|k',0,1); break;
     }
     if (!Cleni.cleni.browse_count()) {
@@ -332,6 +332,7 @@ form _clen [,,399,251] {
     elseif (osoba.key()) {
       Clen.display(0,'f|F');
       Clen.display(1,'O');
+      msg_del.display(substr(del,0,1)=='D'?1:0); 
 //      Clen.if_osoba.display(Cleni.cleni.has_f?1:0);
     }
     else {
@@ -673,7 +674,7 @@ form _clen_butt [,,400,35] {
   button [121,9,,] { tag:'be', title:'Nová osoba', skill:'hdce|hdce'
     help:'naplní položky základními hodnotami pro fyzickou osobu, vlastní vytvoření se provede uložením změn'
     func onclick () { var elem:ezer
-      Cleni.cond_os= 1; Cleni.show_os_fy(0);
+      Clen.Show(&Clen.kon);
       Clen.init(1);
       Clen.display(1,'o'); Clen.display(0,'f');
       Clen.osoba.key(1); Clen.osoba.change(); 
@@ -683,7 +684,7 @@ form _clen_butt [,,400,35] {
   button [221,9,,] { tag:'be', title:'Nová firma', skill:'hdce|hdce'
     help:'naplní položky základními hodnotami pro firmu nebo organizaci, vlastní vytvoření se provede uložením změn'
     func onclick () { var ret:object, elem:ezer
-      Cleni.cond_fy= 1; Cleni.show_os_fy(0);
+      Clen.Show(&Clen.kon);
       Clen.init(1);
       Clen.display(0,'o'); Clen.display(1,'f');
       Clen.osoba.key(0); Clen.osoba.change(); 
@@ -726,11 +727,11 @@ form _clen_butt [,,400,35] {
 }
 # ===========================================================================================> VZTAHY
 panel VZTAHY [,,616,215] { title:'[fa-user] Zvolená osoba a její vztahy k ostatním [fa-users]' 
-    type:'popup', css:'dialog'
-    par:{move:'no'}
+    type:'popup', css:'dialog', par:{move:'no'}
   var id_pinned=0, // připnutá osoba
       id_member=0, // osoba ve vztahu k připnuté
-      old_vyber:number, old_os:number, old_fy:number // výběrová podmínka při staru
+      old_vyber:number // výběrová podmínka při staru
+//          , old_os:number, old_fy:number 
   func Init() {
 //    fo.vztahy.selects("kouč,koučovaný,zaměstnavatel,zaměstnanec",1);
     fo.vztahy.selects(php.klub_vztah_selects(),1);
@@ -738,8 +739,16 @@ panel VZTAHY [,,616,215] { title:'[fa-user] Zvolená osoba a její vztahy k osta
   func Active() {
     return id_pinned!=0;
   }
-  func onblur() { // zavření panelu
-    show_clen(id_pinned,1); Back(0) 
+  func Hide() { // tvrdé zavření panelu
+    id_pinned=0;
+    id_member=0;
+    panel.hide(0)
+  }
+  func onblur() { // zavření aktivního panelu
+    if (id_pinned) {
+      show_clen(id_pinned,1); 
+      Back(0) 
+    }
   }
   func LevaOsoba(_id) { // ==> levá osoba vztahu je pevná
     id_pinned= _id; id_member= 0; fo.init();
@@ -750,10 +759,14 @@ panel VZTAHY [,,616,215] { title:'[fa-user] Zvolená osoba a její vztahy k osta
   }
   func PravaOsoba(_id) { var found:number // ==> najdi osobu napravo vztahu
     id_member= _id; 
-    found= fo.osoby.browse_seek(`v.id_right=${_id}`);
+    found= fo.osoby.browse_seek(`v.id_right=${_id}`,'','','',1);
     if (!found) {
+      fo.osoby.blur(1);
       fo.init();
       fo.member= id2nazev(_id);
+    }
+    else {
+      fo.osoby.show_vztah(0); // bez seek do cleni
     }
   }
   func id2nazev(_id) { var row:object
@@ -762,23 +775,23 @@ panel VZTAHY [,,616,215] { title:'[fa-user] Zvolená osoba a její vztahy k osta
   }
   func save_vyber() {
     old_vyber= Cleni.cond.key();
-    old_os= Cleni.cond_os;
-    old_fy= Cleni.cond_fy;
-    if (!Cleni.cond_fy || !Cleni.cond_os) {
-      Cleni.cond_fy= 1;
-      Cleni.cond_os= 1;
-      Cleni.cleni.osoba_firma(1,1);
+//    old_os= Cleni.cond_os;
+//    old_fy= Cleni.cond_fy;
+//    if (!Cleni.cond_fy || !Cleni.cond_os) {
+//      Cleni.cond_fy= 1;
+//      Cleni.cond_os= 1;
+//      Cleni.cleni.osoba_firma(1,1);
       Cleni.ShowAll();
-    }
+//    }
   }
   func Back(on) {
-    Cleni.cond_fy= old_fy;
-    Cleni.cond_os= old_os;
-    Cleni.cleni.osoba_firma(old_os,old_fy);
-    Cleni.cond.key(old_vyber);
-    Cleni._cleni_vyber(id_pinned);
+//    Cleni.cond_fy= old_fy;
+//    Cleni.cond_os= old_os;
+//    Cleni.cleni.osoba_firma(old_os,old_fy);
     id_pinned= 0;
-    panel.hide(on)
+    Cleni.cond.key(old_vyber); Cleni.cond.change();
+//    Cleni._cleni_vyber(id_pinned);
+//    panel.hide(on)
   }
   use fo: form {
     view v: table vztah
@@ -790,18 +803,23 @@ panel VZTAHY [,,616,215] { title:'[fa-user] Zvolená osoba a její vztahy k osta
       show { data:l.id_clen }
       show { data:p.id_clen }
       show { data:c.id_cis }
+      show osoba { expr:"IF(l.id_clen=@pinned,p.osoba,l.osoba)" }
       show vztah [,,100,] { title:'vztah', expr:
         "IF(l.id_clen=@pinned,c.ikona,c.barva)", format:'q$s' }
-      show nazev [,,100,] { title:'osoba', expr:
+      show nazev [,,100,] { title:'osoba', css_cell:'osoba,0:zluty', expr:
         "IF(l.id_clen=@pinned,IF(p.osoba,CONCAT(p.prijmeni,' ',p.jmeno),p.firma),IF(l.osoba,CONCAT(l.prijmeni,' ',l.jmeno),l.firma))", format:'q$s' }
       show detail [,,70,] { title:'detail', data:v.detail }
       show idm [,,40,] { title:'ID', expr:"IF(l.id_clen=@pinned,p.id_clen,l.id_clen)", format:'r' }
       func onrowclick () { 
+        show_vztah(1);
+      }
+      func show_vztah (to_show_clen) { 
         id_member= idm; 
         fo.load(idv); 
         fo.vztahy= vztah;
         fo.member= id2nazev(idm);
-        if (!show_clen(idm,0)) alert(`v takto nastaveném výběru není "${idm}" viditelný/á`)
+        if (to_show_clen && !show_clen(idm,0)) 
+          alert(`v takto nastaveném výběru není "${idm}" viditelný/á`)
       }
 //      func onsubmit() {
 //        LevaOsoba(idm);
@@ -842,8 +860,11 @@ panel VZTAHY [,,616,215] { title:'[fa-user] Zvolená osoba a její vztahy k osta
           if (ret.msg) 
             alert(ret.msg) 
           else {
-            Refresh();
-            id_vztah= ret.idv
+//            id_vztah= ret.idv;
+            fo.key(ret.idv);
+            fo.save();
+//            Refresh();
+            osoby.browse_seek(`id_vztah=${ret.idv}`);
           }
         }
     }}
@@ -861,10 +882,10 @@ panel VZTAHY [,,616,215] { title:'[fa-user] Zvolená osoba a její vztahy k osta
     func Refresh() { 
       if (!id_member) 
         osoby.browse_load("v.deleted='' && (l.id_clen=@pinned OR p.id_clen=@pinned)",
-          '','','','','',`SET @pinned=${id_pinned}`); 
-      else 
-        osoby.browse_seek("v.deleted='' && (l.id_clen=@pinned OR p.id_clen=@pinned)",
-          '','',`SET @pinned=${id_pinned}`); 
+          '','','','',0,`SET @pinned=${id_pinned}`); 
+      elseif (!osoby.browse_seek("v.deleted='' && (l.id_clen=@pinned OR p.id_clen=@pinned)",
+          '','',`SET @pinned=${id_pinned}`,1))
+        osoby.blur(1);
     }
   }
 }
@@ -873,7 +894,7 @@ form _dary [,,260,256] {
 //  var dary_loaded=0, darce=0 // 
   label [9,6,50,15] { title:'<h1>Dary</h1>'}
   label [2,2,257,30] { css:'ae_parm' }
-  label [60,4,20,] { title:'celkem' }
+//  label [60,4,20,] { title:'celkem' }
   label suma [51,16,50,17] { format:'r' }
   # ==> . přepínání sloupců
   check show_del [109,0,100,18] { title:'i smazané', format:'t', value:'0'
@@ -899,8 +920,12 @@ form _dary [,,260,256] {
     show kdn    { data:dd.zmena_kdo }
     show kdy    { data:dd.zmena_kdy }
     func onrowclick() { dary_znacka(); }
-    func onchange()   { dary_znacka(); }
-    func dary_znacka () { dary.browse_active(); Dar._dar_load(iddar); Dar.autoswitch(1); } //set_zmena() }
+//    func onchange()   { dary_znacka(); }
+    func dary_znacka () { 
+//      dary.browse_active(); 
+      Dar._dar_load(iddar); 
+      Dar.autoswitch(1); 
+    } //set_zmena() }
   }
   label zmena [12,242,236,18] { title:'' },
   # ==> . procedury
@@ -911,7 +936,7 @@ form _dary [,,260,256] {
 //    evals= sys('..','evals');
 //    echo(`_dary_load.evals=${evals}, darce=${darce}, curr=${Cleni.cleni.browse_key()}`);
 //    if (evals>2) return;
-    darce= Cleni.cleni.browse_key();
+    darce= Cleni.cleni.id_clen; //browse_key();
     Dar._dar_init();
     suma= '';
     if (!darce) return;
@@ -919,14 +944,14 @@ form _dary [,,260,256] {
         Dary.show_del ? '' : "left(deleted,1)!='D' AND ",
         " typ IN (8,9) AND id_clen=",darce,
         Dary.show_new ? " AND YEAR(castka_kdy)>=YEAR(CURDATE())-1" : ''
-    ))) return;
-    _dary_suma();
+    ),'','','','',1)) return;
+//    _dary_suma();
     dary.dary_znacka();
 //    dary_loaded= 1; 
   }
-  func _dary_suma () {
-    suma= php.klub_dary_suma(Cleni.cleni.browse_key()); 
-  }
+//  func _dary_suma () {
+//    suma= php.klub_dary_suma(Cleni.cleni.id_clen); 
+//  }
   func _dary_focus () {
     dary.browse_focus()
   }
@@ -1053,12 +1078,12 @@ form _dar [,,390,240] {
       switch (stav) {
       case 1:
         Dary.dary.browse_row(); 
-        Dary._dary_suma();
+//        Dary._dary_suma();
         Clen.load(); Cleni.cleni.browse_seek();
         break;
       case 2:
         if (Dary.dary.browse_seek(`id_dar=${Dar.key()}`)) {
-          Dary._dary_suma();
+//          Dary._dary_suma();
           Clen.load(); Cleni.cleni.browse_seek();
         }
         else {
