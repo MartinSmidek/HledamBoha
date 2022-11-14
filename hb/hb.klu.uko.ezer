@@ -85,7 +85,7 @@ form _ukoly [,,400,50] {
     show barva2 { expr:"IF(stav=1 AND cas_do<LEFT(NOW(),10) AND cas_ok='0000-00-00',1,0)" }
     show [,,50,] { title:'zadal', data:x.surname, format:'sq*t' }
     show [,,50,] { title:'provádí', data:y.surname, format:'sq*t' }
-    show [,,100,] { title:'kontakt', expr:"CONCAT(c.jmeno,' ',c.prijmeni)", format:'sq*t' }
+    show [,,100,] { title:'kontakt', expr:"IF(c.osoba,CONCAT(c.prijmeni,' ',c.jmeno),c.firma)", format:'sq*t' }
     show [,,153,] { title:'popis', data:u.popis, format:'sq*t', css_cell:'je_diskuse,1:diskuse'  }
     show [,,60,] { title:'termín', data:u.cas_do, format:'rs-q*', css_cell:'barva2,1:termin' }
     func onrowclick() { form.load(id_ukol); diskuse.display(je_diskuse) }
@@ -94,7 +94,7 @@ form _ukoly [,,400,50] {
   field u_od { data:u.kdo_od }
   # --------------------------- zobrazené položky
   field id_clen [L_ukol+58,T_ukol+7,41,] { tag:'u', data:u.id_clen, format:'rdt' }
-  field nm_clen [L_ukol+107,T_ukol+7,195,] { tag:'u', expr:"CONCAT(c.jmeno,' ',c.prijmeni)", format:'dt' }
+  field nm_clen [L_ukol+107,T_ukol+7,195,] { tag:'u', expr:"IF(c.osoba,CONCAT(c.prijmeni,' ',c.jmeno),c.firma)", format:'dt' }
   select u_pro [L_ukol+58,T_ukol+32,100,] { tag:'u', type:'map0', options:user.surname, data:u.kdo_pro
     help:'výběr realizátora' }
   field zadal  [L_ukol+201,T_ukol+32,100,] { tag:'u', data:x.surname, format:'d' }

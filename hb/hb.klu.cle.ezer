@@ -424,8 +424,11 @@ form _clen [,,399,251] {
   field nar_rok  [209,137,30,] { tag:'o', title:'jen rok' data:clen.narozeni_rok, format:'r' 
                                     help:'rok narození, pokud neznáme přesnější datum'  }
   field clen_od  [308,137,87,] {tag:'k', type:'date', title:'známe od', data:clen.clen_od, format:'n' }
+  select cirkev  [80,160,99,] { tag:'o', type:'map0', data:clen.cirkev,
+    title:'denominace:', options:cis_k_cirkev.zkratka, value:'0'
+  }
 
-  const zasi=185, oslo=268, pozn=343, hist= 443 // ----------------==> .. pozice částí karty
+  const zasi=195, oslo=268, pozn=343, hist= 443 // ----------------==> .. pozice částí karty
   # ==> .. zasílání - tag=z (zobrazí se při startu)
   field darce   [212,zasi+43,177,] {tag:'z', type:'list', title:'potvrzení na:', par:{delim:';'}, data:clen.darce  }
   check [9,zasi+18,100,17] { tag:'z', title:'jen mailem', data:clen.jen_mail }
@@ -795,7 +798,7 @@ panel VZTAHY [,,616,215] { title:'[fa-user] Zvolená osoba a její vztahy k osta
   }
   use fo: form {
     view v: table vztah
-    browse osoby [240,25,386,191] { rows:9, qry_rows:0, 
+    browse osoby [199,25,386,191] { rows:9, qry_rows:0, 
       view c: table _cis {join:"ON c.druh='vztahy' AND c.data=v.vztah" }
       view l: table clen {join:'ON v.id_left=l.id_clen' }
       view p: table clen {join:'ON v.id_right=p.id_clen' }
@@ -804,11 +807,17 @@ panel VZTAHY [,,616,215] { title:'[fa-user] Zvolená osoba a její vztahy k osta
       show { data:p.id_clen }
       show { data:c.id_cis }
       show osoba { expr:"IF(l.id_clen=@pinned,p.osoba,l.osoba)" }
-      show vztah [,,100,] { title:'vztah', expr:
+      show vztah [,,100,] { title:'vztah', format:'q*s', expr:
         "IF(l.id_clen=@pinned,c.ikona,c.barva)", format:'q$s' }
       show nazev [,,100,] { title:'osoba', css_cell:'osoba,0:zluty', expr:
         "IF(l.id_clen=@pinned,IF(p.osoba,CONCAT(p.prijmeni,' ',p.jmeno),p.firma),IF(l.osoba,CONCAT(l.prijmeni,' ',l.jmeno),l.firma))", format:'q$s' }
-      show detail [,,70,] { title:'detail', data:v.detail }
+      show faze [,,40,] { title:'fáze', format:'s-', expr:"CASE 
+          WHEN zahajeni=0 AND ukonceni=0 THEN '-' 
+          WHEN zahajeni AND zahajeni>NOW() THEN 'bude'
+          WHEN ukonceni AND ukonceni<NOW() THEN 'bylo' 
+          ELSE 'je' END" }
+      show detail [,,70,] { title:'detail', data:v.detail, format:'t'  }
+      show pozn [,,36,] { title:'pozn.', data:v.note, format:'t' }
       show idm [,,40,] { title:'ID', expr:"IF(l.id_clen=@pinned,p.id_clen,l.id_clen)", format:'r' }
       func onrowclick () { 
         show_vztah(1);
@@ -836,17 +845,17 @@ panel VZTAHY [,,616,215] { title:'[fa-user] Zvolená osoba a její vztahy k osta
       func onclick() { 
         show_clen(id_pinned,0)
     } }
-    const short='text-overflow: ellipsis;white-space: nowrap;overflow:hidden'
-    label pinned [18,3,200,15] { help:'připnutá osoba vztahu', style:short}
-    select vztahy [240,0,150,] 
-    label [393,3,15,15] { title:'<i class="fa fa-users fa-green"></i>' }
-    label member [410,3,200,15] { help:'osoba vztahu', style:short}
+    const short='text-overflow:ellipsis; white-space:nowrap; overflow:hidden'
+    label pinned [18,3,171,18] { help:'připnutá osoba vztahu', style:short}
+    select vztahy [197,0,150,] 
+    label [355,3,15,15] { title:'<i class="fa fa-users fa-green"></i>' }
+    label member [376,3,244,15] { help:'osoba vztahu', style:short}
     # ==> funkce
     # ==> . změna vztahu
     field id_vztah {data:v.id_vztah}
-    field detail    [0,37,178,] { title:'^detail vztahu', data:v.detail}
-    field zahajeni  [0,75,90,] { type:'date', title:'^zahájení', data:v.zahajeni, format:'r' }
-    field ukonceni  [100,75,90,] { type:'date', title:'^ukončení', data:v.ukonceni, format:'r' }
+    field detail    [0,37,181,] { title:'^detail vztahu', data:v.detail}
+    field zahajeni  [0,75,87,] { type:'date', title:'^zahájení', data:v.zahajeni, format:'r' }
+    field ukonceni  [100,75,87,] { type:'date', title:'^ukončení', data:v.ukonceni, format:'r' }
     edit note       [0,114,183,71] { title:'^poznámka', data:v.note}
     button [0,194,,] { title:'[fa-save] Uložit změnu', help:'ulož změnu vztahu'
       func onclick () { var ret:object, osoba:number
@@ -867,6 +876,7 @@ panel VZTAHY [,,616,215] { title:'[fa-user] Zvolená osoba a její vztahy k osta
             osoby.browse_seek(`id_vztah=${ret.idv}`);
           }
         }
+        fo.plain();
     }}
     button [104,194,,] { title:'[fa-remove fa-red] Zruš vztah'
       func onclick () { 

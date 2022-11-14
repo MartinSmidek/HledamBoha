@@ -437,7 +437,8 @@ form _d [,,200,250] {
   label [521,176,162,81] { tag:'m', css:'ae_parm' }
   label [530,181,120,20] { tag:'m', title:'jednotlivě mailem' }
   button [530,200,,] { tag:'m', title:'[fa-send-0] ukázat, případně poslat', help:'jednotlivé poslání s kontrolou'
-    func onclick () { clear(); SendMail.Init('pruvodni_mail',odeslano,cleni.id_clen,cleni.dary,rok);
+    func onclick () { clear(); 
+      if (cleni.browse_count()) SendMail.Init('pruvodni_mail',odeslano,cleni.id_clen,cleni.dary,rok);
   }}
   button [530,230,,] { tag:'m', title:'[fa-edit] upravit vzor dopisu', help:'úprava dopisu ID=0'
     func onclick () { clear(); EditMail.Init('pruvodni_mail');

@@ -22,7 +22,7 @@ menu hb { type:'main', active:*
       func show_clen(idc) {}
     }
   }
-  tabs eko {title:"[fa-line-chart] Ekonomika", skill:'he', _sys:'eko',  include:'onclick', active:*  }
+  tabs eko {title:"[fa-line-chart] Ekonomika a statistika", skill:'he', _sys:'eko',  include:'onclick', active:*  }
   tabs dop {title:"[fa-envelope] Korespondence", skill:'hk', _sys:'dop',  include:'onload', active:*  }
   tabs sys {title:"[fa-cogs] Nastavení", skill:'hn', _sys:'sys',  include:'onclick,ezer2.syst', active:*
     //panel oso {type:'right', title:'Osobní nastavení', _sys:'*', include:'onclick' }
@@ -155,6 +155,7 @@ table clen { key_id:'id_clen'
   text   ps             { help:'PS|text připojený do nejbližšího dopisu' },
   text   rodcis         { help:'r.č.|narození:ddmmrrr rodčís:rrmmddxxxx' },
   text   osoba          { help:'druh|fyzická nebo právnické osoba' },
+  number cirkev         { help:'církev|vyznání' },
   number rodina         { help:'rodina|počet osob v rodině' },
   text   titul          { help:'titul|akademický titul nebo zvláštní oslovení' },
   text   titul_za       { help:'titul|akademický titul za jménem' },
@@ -395,6 +396,7 @@ map cis_stredisko:      table _cis { where:"druh='stredisko'", order:'hodnota', 
 map cis_darce:          table _cis { where:"druh='darce'", order:'poradi', key_id:'data'}
 map cis_k_ucet:         table _cis { where:"druh='b_ucty'", order:'data', key_id:'data'}
 map cis_u_stavy:        table _cis { where:"druh='u_stavy'", order:'data', key_id:'data'}
+map cis_k_cirkev:       table _cis { where:"druh='cirkev'", order:'poradi', key_id:'data'}
 //map cis_k_zprava_jak:   table _cis { where:"druh='k_zprava_jak'", order:'data', key_id:'data'}
 map cis_kategorie:      table _cis { where:"druh='kategorie'", order:'zkratka', key_id:'data'}
 map cis_vztahy:         table _cis { where:"druh='vztahy'", order:'zkratka', key_id:'data'}

@@ -55,6 +55,28 @@ function eko_download() {
       ";
   return $html;
 }
+/** =======================================================================================> KOUČING */
+# -------------------------------------------------------------------------------------- eko koucing
+# přehled koučingu
+function eko_koucing() { trace();
+  $html= '';
+  $kat_kouc= 2;
+  $kat_hled= 3;
+  $vztah_koucing= 2;
+  $nk= select('COUNT(*)','clen',"deleted='' AND FIND_IN_SET($kat_kouc,kategorie)");
+  $nh= select('COUNT(*)','clen',"deleted='' AND FIND_IN_SET($kat_hled,kategorie)");
+  $na= select('COUNT(*)','vztah',"deleted='' AND vztah=$vztah_koucing
+      AND zahajeni AND zahajeni<=NOW() AND IF(ukonceni=0,1,ukonceni>=NOW())");
+  // redakce
+  $nk_koucu= kolik_1_2_5($nk,'kouč,kouče,koučů');
+  $nk_hledajicich= kolik_1_2_5($nh,'hledající,hledající,hledajících');
+  $je_na_aktivnich_vedeni= kolik_1_2_5($na,'je $ aktivní vedení,jsou $ aktivní vedení,je $ aktivních vedení');
+  $html.= "<h3>Celkový přehled</h3>
+    Celkem máme v evidenci $nk_koucu a $nk_hledajicich.
+      ... dnes $je_na_aktivnich_vedeni.
+    ";
+  return $html;
+}
 /** =======================================================================================> VÝROČKA */
 # -------------------------------------------------------------------------------------- eko vyrocka
 # seznam loňských dárců do výroční zprávy podle zadaných parametrů

@@ -1,7 +1,22 @@
 # Aplikace HledámBoha
 # (c) 2022 Martin Šmídek <martin@smidek.eu>
 
-panel pre {type:'right', title:"[fa-pie-chart] Přehledy", _sys:'pri'
+panel sta {type:'right', title:"[fa-bar-chart] Statistika", _sys:'sta'
+  use info: form right [12,4,,] 
+  menu m {type:'left', active:*, format:'f+'
+    menu uz {title:'Koučing',type:'group', _sys:'dar'
+      item dar {title:'[fa-lightbulb-o] Přehled'
+        func onclick (i:ezer) { var tab:text
+          clear(); 
+          info.header(i);
+          info.fill('',php.eko_koucing());
+        }
+      }
+    }
+  }
+}
+
+panel pre {type:'right', title:"[fa-pie-chart] Finanční přehledy", _sys:'pre'
   var this_item: ezer, this_par:object
   var this_export: number
   use rp: form _eko [12,4,,] 

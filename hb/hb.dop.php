@@ -392,6 +392,7 @@ function mail_single($mode,$i_smtp,$dopis,$id_clen,$dary,$rok,$dne,$jiny_darce=n
   $ret= (object)array('_error'=>'','_html'=>'','darce'=>'','rc'=>'');
   $dne= str_replace('.','. ',$dne);
   // osobní údaje
+  if (!id_clen) { $ret->_error= "není nastaven adresát"; goto end; }
   $email= select('TRIM(email)','clen',"id_clen=$id_clen");
   $chyba= '';
   if ( !emailIsValid($email,$chyba) ) { $ret->_error= "chyba v emailu: $chyba"; goto end; }
